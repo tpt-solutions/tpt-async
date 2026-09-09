@@ -1,0 +1,19 @@
+[package]
+name        = "tpt-async-timer"
+description = "Heapless const-generic hierarchical timer wheel for tpt-async — no_std compatible"
+workspace   = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["std"]
+alloc   = ["tpt-async-core/alloc"]
+std     = ["alloc"]   # hooks into std monotonic clock
+
+[dependencies]
+tpt-async-core = { workspace = true, default-features = false }
+
+[dev-dependencies]
+criterion = { workspace = true }

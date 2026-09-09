@@ -1,0 +1,15 @@
+[package]
+name        = "tpt-async-macros"
+description = "Proc-macro crate providing #[tpt_async::main] for tpt-async"
+workspace   = "../.."
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote       = { workspace = true }
+syn         = { workspace = true }
+
+[dev-dependencies]
+trybuild = { workspace = true }

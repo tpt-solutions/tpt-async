@@ -1,0 +1,25 @@
+[package]
+name        = "tpt-net-http"
+description = "Minimal spec-compliant HTTP/1.1 and HTTP/2 client/server with zero-copy header parsing for tpt-async"
+workspace   = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["http1"]
+http1   = []
+http2   = ["dep:h2"]
+
+[dependencies]
+tpt-async-core   = { workspace = true }
+tpt-async-io     = { workspace = true }
+tpt-async-timer  = { workspace = true }
+tpt-net-tls      = { workspace = true }
+h2               = { version = "0.4", optional = true }
+
+[dev-dependencies]
+tokio    = { version = "1", features = ["full"] }
+rcgen    = { workspace = true, features = ["pem"] }
+criterion = { workspace = true }

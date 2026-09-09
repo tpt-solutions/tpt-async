@@ -1,0 +1,22 @@
+[package]
+name        = "tpt-async"
+description = "Runtime-agnostic async I/O facade — re-exports tpt_async::prelude from all tpt-async crates"
+workspace   = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default  = ["executor", "timer", "std"]
+alloc    = ["tpt-async-core/alloc", "tpt-async-timer/alloc"]
+std      = ["alloc", "tpt-async-core/std", "tpt-async-timer/std"]
+executor = ["dep:tpt-async-executor"]
+timer    = ["dep:tpt-async-timer"]
+macros   = ["dep:tpt-async-macros"]
+
+[dependencies]
+tpt-async-core     = { workspace = true }
+tpt-async-macros   = { workspace = true, optional = true }
+tpt-async-executor = { workspace = true, optional = true }
+tpt-async-timer    = { workspace = true, optional = true }

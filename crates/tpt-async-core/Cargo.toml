@@ -1,0 +1,19 @@
+[package]
+name          = "tpt-async-core"
+description   = "Executor-agnostic Future traits, Waker abstractions, and zero-cost state-machine helpers for tpt-async"
+workspace     = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["alloc"]
+alloc   = []          # enables JoinHandle and heap-backed shared state
+std     = ["alloc"]   # enables std::error::Error impl on error types
+
+[dependencies]
+spin = { workspace = true }
+
+[dev-dependencies]
+# nothing beyond std for unit tests

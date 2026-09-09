@@ -1,0 +1,27 @@
+# Build artifacts
+/target/
+**/target/
+
+# Cargo lock (keep for binaries, skip for libraries)
+# Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Benchmark outputs
+criterion/
+
+# Coverage
+/coverage/
+lcov.info
+tarpaulin-report.html
+tarpaulin-report.json
+
+# Fuzz
+/fuzz/target/

@@ -1,0 +1,23 @@
+[package]
+name        = "tpt-async-io"
+description = "Zero-copy AsyncRead/AsyncWrite traits abstracting over std, tokio, async-std, and bare-metal hardware"
+workspace   = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["std"]
+alloc   = ["tpt-async-core/alloc"]
+std     = ["alloc"]
+tokio   = ["std", "dep:tokio"]
+async-std = ["std", "dep:async-std"]
+
+[dependencies]
+tpt-async-core = { workspace = true }
+tokio          = { version = "1", features = ["io-util", "net"], optional = true }
+async-std      = { version = "1", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

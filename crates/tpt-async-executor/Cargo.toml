@@ -1,0 +1,19 @@
+[package]
+name        = "tpt-async-executor"
+description = "Optional single-threaded cooperative executor for tpt-async"
+workspace   = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default      = []
+# work-stealing is reserved for a future release
+work-stealing = []
+
+[dependencies]
+tpt-async-core = { workspace = true, features = ["alloc"] }
+
+[dev-dependencies]
+criterion = { workspace = true }

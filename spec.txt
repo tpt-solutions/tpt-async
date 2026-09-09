@@ -1,0 +1,40 @@
+Design Document 2: tpt-async
+The Runtime-Agnostic Async I/O Stack
+1. Vision
+To break the tokio monopoly by providing a truly runtime-agnostic, ultra-lightweight async I/O and networking stack. It must scale seamlessly from a 2MB RAM no_std microcontroller to a 64-core cloud server, without forcing the user into a specific executor or pulling in 150 transitive dependencies.
+2. Workspace Architecture (7 Crates)
+tpt-async-core: Executor-agnostic Future traits, custom Waker abstractions, and zero-cost state machine helpers.
+tpt-async-executor: A lightweight, optional, single-threaded or work-stealing cooperative executor (for when no runtime is provided).
+tpt-async-io: Zero-copy I/O traits (AsyncRead/AsyncWrite wrappers) that abstract over std, tokio, async-std, or bare-metal hardware registers.
+tpt-async-timer: A high-performance, heapless (or low-allocation) hierarchical timer wheel for timeouts and intervals.
+tpt-net-http: A minimal, spec-compliant HTTP/1.1 and HTTP/2 client/server with zero-copy header parsing.
+tpt-net-ws: Pure-Rust WebSocket framing, masking, and ping/pong management (client and server).
+tpt-net-tls: A minimal, locked-down wrapper around rustls with strict MIT-chain auditing and no OpenSSL fallbacks.
+3. Technical Deep Dive: The "Secret Sauce"
+True Executor Agnosticism: We will not use async-trait (which causes heap allocation). Instead, we will leverage Rust's native async fn in traits (RPITIT) and provide a Spawn trait that users can implement for their runtime, or use our lightweight default.
+Heapless Timer Wheels: tpt-async-timer will use a const-generic hierarchical timer wheel, allowing embedded systems to manage thousands of timeouts with zero heap allocation and O(1) insertion/removal.
+Zero-Copy HTTP Parsing: Leveraging tpt-doc-core principles, HTTP headers will be parsed directly from the I/O buffer into string slices (&'a [u8]), eliminating string copying during request routing.
+4. Target API
+
+use tpt_async::prelude::*;
+use tpt_net_http::prelude::*;
+
+// Works on no_std, WASM, or any runtime that implements `tpt_async::Spawn`
+#[tpt_async::main]
+async fn main() {
+    let client = HttpClient::builder()
+        .tls(tpt_net_tls::rustls_config())
+        .build();
+
+    let response = client.get("https://api.tpt.solutions/health")
+        .timeout(Duration::from_millis(500)) // Powered by heapless timer wheel
+        .send()
+        .await?;
+
+    println!("Status: {}", response.status());
+}
+
+5. Execution Roadmap
+Phase 1 (Months 1-2): tpt-async-core + tpt-async-executor + tpt-async-timer. Build the foundational scheduling and timing primitives.
+Phase 2 (Months 3-4): tpt-async-io + tpt-net-tls. Create the abstraction layer over raw I/O and secure it.
+Phase 3 (Months 5-6): tpt-net-http + tpt-net-ws. Deliver the high-level, zero-copy networking protocols.

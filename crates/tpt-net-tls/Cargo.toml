@@ -1,0 +1,26 @@
+[package]
+name        = "tpt-net-tls"
+description = "Minimal rustls 0.23 TLS wrapper for tpt-async — no OpenSSL, TLS 1.3 by default"
+workspace   = "../.."
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default      = ["webpki-roots"]
+webpki-roots = ["dep:webpki-roots"]   # bundled Mozilla root certs (default)
+native-certs = ["dep:rustls-native-certs"]  # system root certs
+tls12        = []  # opt-in TLS 1.2 support
+
+[dependencies]
+tpt-async-core = { workspace = true }
+tpt-async-io   = { workspace = true }
+rustls              = { workspace = true, features = ["ring"] }
+rustls-pemfile      = { workspace = true }
+webpki-roots        = { workspace = true, optional = true }
+rustls-native-certs = { workspace = true, optional = true }
+
+[dev-dependencies]
+rcgen    = { workspace = true, features = ["pem"] }
+tokio    = { version = "1", features = ["full"] }

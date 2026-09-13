@@ -1,6 +1,17 @@
 [package]
 name        = "tpt-async-timer"
 description = "Heapless const-generic hierarchical timer wheel for tpt-async — no_std compatible"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["async", "no_std", "embedded", "timer"]
+categories    = ["asynchronous", "embedded", "no-std"]
 workspace   = "../.."
 
 [package.metadata.docs.rs]
@@ -9,11 +20,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["std"]
-alloc   = ["tpt-async-core/alloc"]
-std     = ["alloc"]   # hooks into std monotonic clock
+# Reserved for future heap-backed conveniences; the core wheel and all timer
+# futures are allocation-free.
+alloc   = []
+std     = ["alloc"]   # enables the background driver thread + sleep()/timeout()
 
 [dependencies]
-tpt-async-core = { workspace = true, default-features = false }
+# The wheel uses a spin mutex so it stays no_std-safe while still shareable
+# across threads.
+spin = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

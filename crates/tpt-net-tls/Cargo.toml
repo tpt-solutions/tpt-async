@@ -1,6 +1,17 @@
 [package]
 name        = "tpt-net-tls"
 description = "Minimal rustls 0.23 TLS wrapper for tpt-async — no OpenSSL, TLS 1.3 by default"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["tls", "rustls", "async"]
+categories    = ["network-programming"]
 workspace   = "../.."
 
 [package.metadata.docs.rs]
@@ -16,11 +27,12 @@ tls12        = []  # opt-in TLS 1.2 support
 [dependencies]
 tpt-async-core = { workspace = true }
 tpt-async-io   = { workspace = true }
-rustls              = { workspace = true, features = ["ring"] }
+tpt-async-timer = { workspace = true }
+rustls              = { workspace = true, features = ["ring", "std"] }
 rustls-pemfile      = { workspace = true }
 webpki-roots        = { workspace = true, optional = true }
 rustls-native-certs = { workspace = true, optional = true }
 
 [dev-dependencies]
-rcgen    = { workspace = true, features = ["pem"] }
+rcgen    = { workspace = true }
 tokio    = { version = "1", features = ["full"] }

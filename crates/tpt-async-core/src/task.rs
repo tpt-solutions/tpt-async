@@ -63,24 +63,57 @@ impl<T> JoinHandle<T> {
         Self { shared }
     }
 
-    /// Returns `true` if the task has already finished.
+    /// Returns `true` if the task has already finished (successfully or by
+    /// cancellation).
     pub fn is_finished(&self) -> bool {
         self.shared.flags.load(Ordering::Acquire) != PENDING
+    }
+
+    /// Cancel the task: the handle resolves to `Err(Cancelled)` and the
+    /// executor will discard the result if the task later completes.
+    ///
+    /// This is advisory — the underlying future is dropped by the executor,
+    /// not by this call.
+    pub fn cancel(&self) {
+        self.shared.cancel();
     }
 }
 
 impl<T> Future for JoinHandle<T> {
     type Output = Result<T, Cancelled>;
 
+    /// Polls the handle.  The first `Ready` poll consumes the result; a
+    /// subsequent poll after `Ready(Ok(_))` panics (the result is gone).
+    ///
+    /// # Panics
+    /// Panics if polled again after having returned `Ready(Ok(_))` — the
+    /// result value has already been handed out and cannot be produced a
+    /// second time.  `Ready(Err(Cancelled))` is repeatable.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.shared.flags.load(Ordering::Acquire) {
-            READY => Poll::Ready(Ok(self.shared.result.lock().take().expect("result missing"))),
+            READY => {
+                let taken = self.shared.result.lock().take();
+                debug_assert!(taken.is_some(), "JoinHandle polled after completion");
+                Poll::Ready(Ok(
+                    taken.expect("JoinHandle polled after already yielding Ready(Ok(_))")
+                ))
+            }
             CANCELLED => Poll::Ready(Err(Cancelled)),
             _ => {
                 // Register waker before re-checking to avoid a race.
-                *self.shared.waker.lock() = Some(cx.waker().clone());
+                let mut slot = self.shared.waker.lock();
+                if !slot.as_ref().is_some_and(|w| w.will_wake(cx.waker())) {
+                    *slot = Some(cx.waker().clone());
+                }
+                drop(slot);
                 match self.shared.flags.load(Ordering::Acquire) {
-                    READY => Poll::Ready(Ok(self.shared.result.lock().take().expect("result missing"))),
+                    READY => {
+                        let taken = self.shared.result.lock().take();
+                        debug_assert!(taken.is_some(), "JoinHandle polled after completion");
+                        Poll::Ready(Ok(
+                            taken.expect("JoinHandle polled after already yielding Ready(Ok(_))")
+                        ))
+                    }
                     CANCELLED => Poll::Ready(Err(Cancelled)),
                     _ => Poll::Pending,
                 }

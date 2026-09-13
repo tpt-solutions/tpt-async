@@ -11,7 +11,7 @@
 //! use tpt_net_tls::{TlsConnector, rustls_config};
 //!
 //! // Build a client connector using Mozilla's root certs (default feature).
-//! let connector = TlsConnector::new(rustls_config());
+//! let connector = TlsConnector::new(rustls_config().expect("trust store"));
 //!
 //! // Connect to a server (supply any AsyncRead + AsyncWrite + Unpin transport).
 //! // let stream = …; // e.g. a TCP socket
@@ -26,6 +26,9 @@
 //! | `webpki-roots`  | yes     | Mozilla root certs bundled via `webpki-roots` |
 //! | `native-certs`  | no      | System trust store via `rustls-native-certs` |
 //! | `tls12`         | no      | Opt-in TLS 1.2 support (TLS 1.3 only by default) |
+//!
+//! Handshake timeouts (`connect_timeout`/`accept_timeout`) are powered by the
+//! timer crate's std driver.
 
 pub mod acceptor;
 pub mod config;
@@ -34,7 +37,7 @@ pub mod error;
 pub mod stream;
 
 pub use acceptor::TlsAcceptor;
-pub use config::rustls_config;
+pub use config::{load_pem_certs, load_pem_key, rustls_config, server_config};
 pub use connector::TlsConnector;
 pub use error::TlsError;
 pub use stream::TlsStream;

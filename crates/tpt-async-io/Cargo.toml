@@ -1,6 +1,17 @@
 [package]
 name        = "tpt-async-io"
 description = "Zero-copy AsyncRead/AsyncWrite traits abstracting over std, tokio, async-std, and bare-metal hardware"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["async", "io", "no_std"]
+categories    = ["asynchronous", "embedded"]
 workspace   = "../.."
 
 [package.metadata.docs.rs]

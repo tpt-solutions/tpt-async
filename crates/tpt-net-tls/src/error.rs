@@ -11,10 +11,14 @@ pub enum TlsError {
     /// A rustls protocol or certificate error.
     Rustls(rustls::Error),
     /// An I/O error on the underlying transport.
-    Io(tpt_async_io::read::IoError),
-    /// An application attempted to use the stream before the handshake
-    /// completed.
-    HandshakeNotComplete,
+    Io(tpt_async_io::IoError),
+    /// The operation exceeded its configured timeout.
+    TimedOut,
+    /// The client trust store is empty: enable the `webpki-roots` (default)
+    /// or `native-certs` feature, or supply roots manually.
+    RootStoreEmpty,
+    /// A PEM certificate/key could not be parsed.
+    Pem(std::io::Error),
 }
 
 impl fmt::Display for TlsError {
@@ -22,9 +26,13 @@ impl fmt::Display for TlsError {
         match self {
             TlsError::Rustls(e) => write!(f, "TLS error: {e}"),
             TlsError::Io(e) => write!(f, "I/O error: {e}"),
-            TlsError::HandshakeNotComplete => {
-                write!(f, "TLS handshake has not completed yet")
-            }
+            TlsError::TimedOut => write!(f, "TLS operation timed out"),
+            TlsError::RootStoreEmpty => write!(
+                f,
+                "trust store is empty: enable the webpki-roots or \
+                 native-certs feature, or supply roots manually"
+            ),
+            TlsError::Pem(e) => write!(f, "PEM parse error: {e}"),
         }
     }
 }
@@ -34,7 +42,8 @@ impl std::error::Error for TlsError {
         match self {
             TlsError::Rustls(e) => Some(e),
             TlsError::Io(e) => Some(e),
-            TlsError::HandshakeNotComplete => None,
+            TlsError::Pem(e) => Some(e),
+            TlsError::TimedOut | TlsError::RootStoreEmpty => None,
         }
     }
 }
@@ -45,8 +54,8 @@ impl From<rustls::Error> for TlsError {
     }
 }
 
-impl From<tpt_async_io::read::IoError> for TlsError {
-    fn from(e: tpt_async_io::read::IoError) -> Self {
+impl From<tpt_async_io::IoError> for TlsError {
+    fn from(e: tpt_async_io::IoError) -> Self {
         TlsError::Io(e)
     }
 }

@@ -14,6 +14,21 @@ use tpt_async_io::write::AsyncWrite;
 
 use crate::error::TlsError;
 
+/// Maps a crate error to the [`IoError`] the trait signatures require.
+/// rustls errors ride along as InvalidData; the typed error remains available
+/// on the handshake path (`Result<_, TlsError>`).
+fn into_io(e: TlsError) -> IoError {
+    match e {
+        TlsError::Io(io) => io,
+        TlsError::Rustls(e) => IoError::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            e.to_string(),
+        )),
+        TlsError::Pem(e) => IoError::from(e),
+        other => IoError::from(std::io::Error::other(other.to_string())),
+    }
+}
+
 // ── TlsStream ────────────────────────────────────────────────────────────────
 
 /// A TLS stream layered over any [`AsyncRead`] + [`AsyncWrite`] transport.
@@ -21,6 +36,18 @@ use crate::error::TlsError;
 /// Obtain one via [`TlsConnector::connect`] or [`TlsAcceptor::accept`]; both
 /// run the handshake before returning.  The stream itself then implements
 /// [`AsyncRead`] and [`AsyncWrite`] for exchanging plaintext.
+///
+/// # Flush semantics
+///
+/// [`poll_write`](AsyncWrite::poll_write) accepts plaintext into rustls and
+/// returns `Ok(n)` as soon as the bytes are *accepted*; the resulting
+/// ciphertext is flushed to the transport opportunistically — from
+/// [`poll_write`](AsyncWrite::poll_write), [`poll_flush`](AsyncWrite::poll_flush),
+/// **and** [`poll_read`](AsyncRead::poll_read) — so a write that is still in
+/// flight always drains once the transport becomes writable, even if the
+/// task immediately goes back to awaiting a response.  Call
+/// [`poll_flush`](AsyncWrite::poll_flush) (or `AsyncWriteExt::flush`) when
+/// you need a hard guarantee that bytes have left the process.
 ///
 /// [`TlsConnector::connect`]: crate::TlsConnector::connect
 /// [`TlsAcceptor::accept`]: crate::TlsAcceptor::accept
@@ -56,18 +83,17 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> TlsStream<IO> {
         // Append newly-generated TLS records to whatever is still pending.
         self.conn
             .write_tls(&mut self.write_buf)
-            .map_err(|e| TlsError::Io(IoError::from(e)))?;
+            .map_err(IoError::from)
+            .map_err(TlsError::Io)?;
         Ok(())
     }
 
     /// Tries to flush `write_buf` to the underlying IO.
     ///
-    /// Returns `Poll::Pending` if the IO is not ready for writing, or
-    /// `Poll::Ready(Ok(()))` once the buffer is fully drained.
-    fn poll_flush_write_buf(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), TlsError>> {
+    /// Returns `Poll::Pending` if the IO is not ready for writing (the waker
+    /// is registered by the transport), or `Poll::Ready(Ok(()))` once the
+    /// buffer is fully drained.
+    fn poll_flush_write_buf(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), TlsError>> {
         while self.write_pos < self.write_buf.len() {
             let pending_slice = &self.write_buf[self.write_pos..];
             let n = match Pin::new(&mut self.io).poll_write(cx, pending_slice) {
@@ -86,6 +112,23 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> TlsStream<IO> {
         Poll::Ready(Ok(()))
     }
 
+    /// If ciphertext is pending, try to push it to the transport.
+    ///
+    /// This is the liveness primitive: *every* poll path (read, write, flush)
+    /// drives pending writes, so buffered records always drain as soon as the
+    /// transport becomes writable, regardless of which direction the task is
+    /// currently awaiting.  Records rustls generates post-handshake (e.g.
+    /// session tickets) are pulled here as well.
+    fn poll_drive_pending_writes(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), TlsError>> {
+        if self.conn.wants_write() {
+            self.pull_tls_records()?;
+        }
+        if self.write_pos >= self.write_buf.len() {
+            return Poll::Ready(Ok(()));
+        }
+        self.poll_flush_write_buf(cx)
+    }
+
     /// Feeds bytes from `read_buf` into rustls and processes any newly
     /// decrypted data.  Returns how many bytes of `read_buf` were consumed.
     fn feed_incoming_to_rustls(&mut self) -> Result<usize, TlsError> {
@@ -97,7 +140,8 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> TlsStream<IO> {
         let consumed = self
             .conn
             .read_tls(&mut cursor)
-            .map_err(|e| TlsError::Io(IoError::from(e)))?;
+            .map_err(IoError::from)
+            .map_err(TlsError::Io)?;
 
         // Remove consumed bytes from the front of read_buf.
         if consumed > 0 {
@@ -105,16 +149,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> TlsStream<IO> {
         }
 
         // Decrypt and authenticate.
-        self.conn
-            .process_new_packets()
-            .map_err(|e| {
-                // Convert rustls::Error to TlsError.  rustls::Error implements
-                // Display and Into<std::io::Error> in 0.23.
-                TlsError::Io(IoError::from(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    e.to_string(),
-                )))
-            })?;
+        self.conn.process_new_packets().map_err(TlsError::Rustls)?;
 
         Ok(consumed)
     }
@@ -127,28 +162,39 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> TlsStream<IO> {
     /// [`TlsConnector::connect`] and [`TlsAcceptor::accept`] call it
     /// automatically, so users of those APIs do not need to call it manually.
     ///
+    /// The loop follows the rustls-recommended pattern: drive `wants_read`
+    /// (fetch + process) and `wants_write` (pull + send) until the handshake
+    /// is done *and* every record rustls produced has been flushed.  Checking
+    /// only `is_handshaking` would race the final flight: the record that
+    /// completes the handshake can itself enqueue the peer's awaited bytes.
+    ///
     /// [`TlsConnector::connect`]: crate::TlsConnector::connect
     /// [`TlsAcceptor::accept`]: crate::TlsAcceptor::accept
     pub async fn handshake(&mut self) -> Result<(), TlsError> {
         loop {
-            if !self.conn.is_handshaking() {
-                return Ok(());
+            let mut progress = false;
+
+            // ── 1. Process any buffered ciphertext. ───────────────────────
+            if !self.read_buf.is_empty() {
+                let consumed = self.feed_incoming_to_rustls()?;
+                if consumed > 0 {
+                    progress = true;
+                }
             }
 
-            // ── 1. Send any pending TLS records ──────────────────────────
-            self.pull_tls_records()?;
-
+            // ── 2. Drain everything rustls wants to send. ─────────────────
+            if self.conn.wants_write() {
+                self.pull_tls_records()?;
+            }
             if !self.write_buf.is_empty() {
-                // Write everything in write_buf to the transport.
                 let total = self.write_buf.len();
                 let mut written = self.write_pos;
                 while written < total {
                     let slice = &self.write_buf[written..];
-                    let n = core::future::poll_fn(|cx| {
-                        Pin::new(&mut self.io).poll_write(cx, slice)
-                    })
-                    .await
-                    .map_err(TlsError::Io)?;
+                    let n =
+                        core::future::poll_fn(|cx| Pin::new(&mut self.io).poll_write(cx, slice))
+                            .await
+                            .map_err(TlsError::Io)?;
                     if n == 0 {
                         return Err(TlsError::Io(IoError::write_zero()));
                     }
@@ -161,28 +207,37 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> TlsStream<IO> {
                 core::future::poll_fn(|cx| Pin::new(&mut self.io).poll_flush(cx))
                     .await
                     .map_err(TlsError::Io)?;
+                progress = true;
             }
 
-            // ── 2. Read more TLS data from the transport ──────────────────
-            let mut tmp = [0u8; 4096];
-            let mut io_buf = ReadBuf::new(&mut tmp);
-            core::future::poll_fn(|cx| Pin::new(&mut self.io).poll_read(cx, &mut io_buf))
-                .await
-                .map_err(TlsError::Io)?;
-
-            let filled = io_buf.filled();
-            if filled.is_empty() {
-                return Err(TlsError::Io(IoError::from(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "peer closed connection during TLS handshake",
-                ))));
+            // ── 3. Done only when the handshake is complete AND every record
+            //      rustls produced has reached the transport. ──────────────
+            if !self.conn.is_handshaking()
+                && !self.conn.wants_write()
+                && self.write_pos >= self.write_buf.len()
+            {
+                return Ok(());
             }
-            self.read_buf.extend_from_slice(filled);
 
-            // ── 3. Parse and decrypt ──────────────────────────────────────
-            self.feed_incoming_to_rustls()?;
+            // ── 4. Fetch more ciphertext when rustls wants it, or when this
+            //      iteration made no progress (avoid a hot spin). ──────────
+            if self.conn.wants_read() || !progress {
+                let mut tmp = [0u8; 4096];
+                let mut io_buf = ReadBuf::new(&mut tmp);
+                core::future::poll_fn(|cx| Pin::new(&mut self.io).poll_read(cx, &mut io_buf))
+                    .await
+                    .map_err(TlsError::Io)?;
 
-            // Loop: rustls may need several round-trips to complete the handshake.
+                let filled = io_buf.filled();
+                if filled.is_empty() {
+                    return Err(TlsError::Io(IoError::from(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "peer closed connection during TLS handshake",
+                    ))));
+                }
+                self.read_buf.extend_from_slice(filled);
+                self.feed_incoming_to_rustls()?;
+            }
         }
     }
 }
@@ -198,6 +253,15 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> AsyncRead for TlsStream<IO> {
         let this = Pin::into_inner(self);
 
         loop {
+            // ── Opportunistically drain pending ciphertext ─────────────────
+            // Keeps a write accepted moments ago flowing even when the task
+            // immediately went back to awaiting a response.
+            match this.poll_drive_pending_writes(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(into_io(e))),
+                Poll::Ready(Ok(())) => {}
+            }
+
             // ── Try to drain plaintext rustls already has decrypted ────────
             {
                 let mut reader = this.conn.reader();
@@ -219,18 +283,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> AsyncRead for TlsStream<IO> {
 
             // ── Feed any buffered ciphertext into rustls ───────────────────
             if !this.read_buf.is_empty() {
-                this.feed_incoming_to_rustls()
-                    .map_err(|te| match te {
-                        TlsError::Io(e) => e,
-                        TlsError::Rustls(e) => IoError::from(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            e.to_string(),
-                        )),
-                        TlsError::HandshakeNotComplete => IoError::from(io::Error::new(
-                            io::ErrorKind::Other,
-                            "handshake not complete",
-                        )),
-                    })?;
+                this.feed_incoming_to_rustls().map_err(into_io)?;
                 // Go back to the top and try to read plaintext again.
                 continue;
             }
@@ -268,32 +321,20 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> AsyncWrite for TlsStream<IO> {
     ) -> Poll<Result<usize, IoError>> {
         let this = Pin::into_inner(self);
 
-        // First, flush any TLS records still pending from a previous write.
-        if this.write_pos < this.write_buf.len() {
-            match this.poll_flush_write_buf(cx) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(Err(e)) => {
-                    return Poll::Ready(Err(match e {
-                        TlsError::Io(io) => io,
-                        TlsError::Rustls(e) => IoError::from(io::Error::new(
-                            io::ErrorKind::Other,
-                            e.to_string(),
-                        )),
-                        TlsError::HandshakeNotComplete => IoError::from(io::Error::new(
-                            io::ErrorKind::Other,
-                            "handshake not complete",
-                        )),
-                    }))
-                }
-                Poll::Ready(Ok(())) => {}
-            }
+        // First, finish any ciphertext still pending from a previous write.
+        // Until it drains we must not accept new plaintext: returning
+        // `Pending` here is correct because this poll has not consumed `buf`
+        // yet, so the caller will simply retry with the same bytes.
+        match this.poll_flush_write_buf(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(into_io(e))),
+            Poll::Ready(Ok(())) => {}
         }
 
         // Give the plaintext to rustls; it appends TLS records internally.
         {
             let mut writer = this.conn.writer();
-            let n = std::io::Write::write(&mut writer, buf)
-                .map_err(IoError::from)?;
+            let n = std::io::Write::write(&mut writer, buf).map_err(IoError::from)?;
             if n == 0 {
                 return Poll::Ready(Err(IoError::write_zero()));
             }
@@ -301,63 +342,27 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> AsyncWrite for TlsStream<IO> {
 
         // Pull the freshly-generated TLS records into write_buf.
         if let Err(e) = this.pull_tls_records() {
-            return Poll::Ready(Err(match e {
-                TlsError::Io(io) => io,
-                TlsError::Rustls(e) => IoError::from(io::Error::new(
-                    io::ErrorKind::Other,
-                    e.to_string(),
-                )),
-                TlsError::HandshakeNotComplete => IoError::from(io::Error::new(
-                    io::ErrorKind::Other,
-                    "handshake not complete",
-                )),
-            }));
+            return Poll::Ready(Err(into_io(e)));
         }
 
-        // Begin flushing (may or may not finish in this poll).
+        // Try to send them right away.
         match this.poll_flush_write_buf(cx) {
-            Poll::Pending => {
-                // The write has been accepted by rustls; tell the caller we
-                // consumed the bytes even though we haven't sent them yet.
-                Poll::Ready(Ok(buf.len()))
-            }
+            // Bytes are accepted by rustls; ciphertext stays buffered and is
+            // drained opportunistically by poll_read/poll_write/poll_flush
+            // (see the type docs).  Reporting acceptance is therefore safe.
+            Poll::Pending => Poll::Ready(Ok(buf.len())),
             Poll::Ready(Ok(())) => Poll::Ready(Ok(buf.len())),
-            Poll::Ready(Err(e)) => Poll::Ready(Err(match e {
-                TlsError::Io(io) => io,
-                TlsError::Rustls(e) => IoError::from(io::Error::new(
-                    io::ErrorKind::Other,
-                    e.to_string(),
-                )),
-                TlsError::HandshakeNotComplete => IoError::from(io::Error::new(
-                    io::ErrorKind::Other,
-                    "handshake not complete",
-                )),
-            })),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(into_io(e))),
         }
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), IoError>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         let this = Pin::into_inner(self);
 
         // Flush any TLS records still in write_buf to the transport.
         match this.poll_flush_write_buf(cx) {
             Poll::Pending => return Poll::Pending,
-            Poll::Ready(Err(e)) => {
-                return Poll::Ready(Err(match e {
-                    TlsError::Io(io) => io,
-                    TlsError::Rustls(e) => IoError::from(io::Error::new(
-                        io::ErrorKind::Other,
-                        e.to_string(),
-                    )),
-                    TlsError::HandshakeNotComplete => IoError::from(io::Error::new(
-                        io::ErrorKind::Other,
-                        "handshake not complete",
-                    )),
-                }))
-            }
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(into_io(e))),
             Poll::Ready(Ok(())) => {}
         }
 
@@ -365,10 +370,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> AsyncWrite for TlsStream<IO> {
         Pin::new(&mut this.io).poll_flush(cx)
     }
 
-    fn poll_shutdown(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), IoError>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         let this = Pin::into_inner(self);
 
         // Send a TLS close_notify alert.
@@ -376,21 +378,13 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> AsyncWrite for TlsStream<IO> {
 
         // Drain any records rustls produced for the close_notify.
         if let Err(e) = this.pull_tls_records() {
-            return Poll::Ready(Err(match e {
-                TlsError::Io(io) => io,
-                _ => IoError::from(io::Error::new(io::ErrorKind::Other, "tls shutdown error")),
-            }));
+            return Poll::Ready(Err(into_io(e)));
         }
 
         // Write them out.
         match this.poll_flush_write_buf(cx) {
             Poll::Pending => return Poll::Pending,
-            Poll::Ready(Err(e)) => {
-                return Poll::Ready(Err(match e {
-                    TlsError::Io(io) => io,
-                    _ => IoError::from(io::Error::new(io::ErrorKind::Other, "tls shutdown error")),
-                }))
-            }
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(into_io(e))),
             Poll::Ready(Ok(())) => {}
         }
 

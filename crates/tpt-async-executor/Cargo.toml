@@ -1,6 +1,17 @@
 [package]
 name        = "tpt-async-executor"
 description = "Optional single-threaded cooperative executor for tpt-async"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["async", "executor", "runtime"]
+categories    = ["asynchronous"]
 workspace   = "../.."
 
 [package.metadata.docs.rs]
@@ -8,9 +19,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default      = []
-# work-stealing is reserved for a future release
-work-stealing = []
+default = []
 
 [dependencies]
 tpt-async-core = { workspace = true, features = ["alloc"] }

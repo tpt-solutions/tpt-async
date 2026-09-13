@@ -2,7 +2,10 @@
 
 /// A monotonic tick source.
 ///
-/// Implement this trait for your platform to drive a [`TimerWheel`](crate::wheel::TimerWheel).
+/// Implement this trait for your platform to drive a
+/// [`TimerWheel`](crate::wheel::TimerWheel): read `now_ticks()` each loop
+/// iteration and call [`advance_to`](crate::wheel::TimerWheel::advance_to).
+/// On `std`, the built-in [`driver`](crate::driver) module does this for you.
 pub trait Clock {
     /// Return the current tick count.
     fn now_ticks(&self) -> u64;
@@ -24,11 +27,6 @@ impl StdClock {
             start: std::time::Instant::now(),
         }
     }
-
-    /// Number of milliseconds per tick (always 1).
-    pub fn millis_per_tick() -> u64 {
-        1
-    }
 }
 
 #[cfg(feature = "std")]
@@ -43,5 +41,18 @@ impl Clock for StdClock {
     /// Returns elapsed milliseconds since construction.
     fn now_ticks(&self) -> u64 {
         self.start.elapsed().as_millis() as u64
+    }
+}
+
+/// A clock that always reads a fixed tick count.
+///
+/// Useful for deterministic tests and for bridging a hardware tick counter
+/// you advance manually.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FixedClock(pub u64);
+
+impl Clock for FixedClock {
+    fn now_ticks(&self) -> u64 {
+        self.0
     }
 }

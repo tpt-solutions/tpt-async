@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use rustls::{ClientConfig, ClientConnection, Connection};
 use rustls::pki_types::ServerName;
+use rustls::{ClientConfig, ClientConnection, Connection};
 use tpt_async_io::read::AsyncRead;
 use tpt_async_io::write::AsyncWrite;
 
@@ -62,5 +62,32 @@ impl TlsConnector {
         let mut tls = TlsStream::new(stream, Connection::Client(conn));
         tls.handshake().await?;
         Ok(tls)
+    }
+
+    /// Like [`connect`](TlsConnector::connect), but fails with
+    /// [`TlsError::TimedOut`] if the handshake takes longer than `timeout`.
+    ///
+    /// The deadline is enforced with the timer crate's std driver, so this
+    /// works under any executor that parks on wake (including
+    /// `LocalExecutor::block_on`).
+    ///
+    /// # Errors
+    ///
+    /// [`TlsError::TimedOut`] on timeout; otherwise as for [`connect`].
+    ///
+    /// [`connect`]: TlsConnector::connect
+    pub async fn connect_timeout<IO>(
+        &self,
+        server_name: ServerName<'static>,
+        stream: IO,
+        timeout: core::time::Duration,
+    ) -> Result<TlsStream<IO>, TlsError>
+    where
+        IO: AsyncRead + AsyncWrite + Unpin,
+    {
+        match tpt_async_timer::driver::timeout(timeout, self.connect(server_name, stream)).await {
+            Ok(result) => result,
+            Err(_timed_out) => Err(TlsError::TimedOut),
+        }
     }
 }

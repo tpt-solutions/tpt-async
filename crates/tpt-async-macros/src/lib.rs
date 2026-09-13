@@ -1,32 +1,42 @@
+// Copyright TPT Solutions
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Proc-macro crate for `tpt-async`.
 //!
-//! Provides the [`macro@main`] attribute.
+//! Provides the [`macro@main`] attribute, which drives an `async fn main` on
+//! the facade's executor via `tpt_async::__private::LocalExecutor` — so
+//! depending on `tpt-async` (with the default features) is all that is
+//! required; no direct `tpt-async-executor` dependency needed.
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn};
+use syn::{parse_macro_input, ItemFn, ReturnType};
 
-/// Marks an `async fn main()` as the entry point, driving it with
-/// `tpt_async_executor::LocalExecutor`.
+/// Marks an `async fn main()` as the entry point, driving it with the
+/// `tpt-async` executor.
+///
+/// The async function's return value is the process exit value: returning
+/// `()` exits successfully, and any type implementing
+/// `Termination` (e.g. `Result<(), E: Debug>`)
+/// is forwarded to the runtime, which reports `Err` values and exits with a
+/// failure code.
 ///
 /// # Example
 ///
 /// ```rust,ignore
+/// use tpt_async::prelude::*;
+///
 /// #[tpt_async::main]
-/// async fn main() {
+/// async fn main() -> Result<(), std::io::Error> {
 ///     println!("hello from tpt-async");
+///     Ok(())
 /// }
 /// ```
 ///
-/// Expands to:
+/// # Requirements
 ///
-/// ```rust,ignore
-/// fn main() {
-///     tpt_async_executor::LocalExecutor::new().block_on(async {
-///         // original body
-///     });
-/// }
-/// ```
+/// The invoking crate must depend on the `tpt-async` facade (the macro
+/// expands to `tpt_async::__private::…`, which the facade always provides).
 ///
 /// # Panics (compile-time)
 ///
@@ -45,7 +55,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     if input.sig.asyncness.is_none() {
         return syn::Error::new_spanned(
-            &input.sig.fn_token,
+            input.sig.fn_token,
             "#[tpt_async::main] can only be applied to an `async fn`",
         )
         .to_compile_error()
@@ -65,10 +75,23 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attrs = &input.attrs;
     let vis = &input.vis;
 
-    let output = quote! {
-        #(#attrs)*
-        #vis fn main() {
-            ::tpt_async_executor::LocalExecutor::new().block_on(async #body);
+    // Preserve a non-unit return type so `Result` exits report failures via
+    // `Termination`; a unit return is discarded as before.
+    let returns_value = !matches!(input.sig.output, ReturnType::Default);
+    let output = if returns_value {
+        let ret = &input.sig.output;
+        quote! {
+            #(#attrs)*
+            #vis fn main() #ret {
+                ::tpt_async::__private::LocalExecutor::new().block_on(async #body)
+            }
+        }
+    } else {
+        quote! {
+            #(#attrs)*
+            #vis fn main() {
+                ::tpt_async::__private::LocalExecutor::new().block_on(async #body);
+            }
         }
     };
 

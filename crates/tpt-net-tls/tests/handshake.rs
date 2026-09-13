@@ -47,26 +47,17 @@ impl AsyncWrite for MemPipe {
         data: &[u8],
     ) -> Poll<Result<usize, IoError>> {
         let inner = Pin::new(&mut Pin::into_inner(self).0);
-        tokio::io::AsyncWrite::poll_write(inner, cx, data)
-            .map_err(IoError::from)
+        tokio::io::AsyncWrite::poll_write(inner, cx, data).map_err(IoError::from)
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), IoError>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         let inner = Pin::new(&mut Pin::into_inner(self).0);
-        tokio::io::AsyncWrite::poll_flush(inner, cx)
-            .map_err(IoError::from)
+        tokio::io::AsyncWrite::poll_flush(inner, cx).map_err(IoError::from)
     }
 
-    fn poll_shutdown(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), IoError>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         let inner = Pin::new(&mut Pin::into_inner(self).0);
-        tokio::io::AsyncWrite::poll_shutdown(inner, cx)
-            .map_err(IoError::from)
+        tokio::io::AsyncWrite::poll_shutdown(inner, cx).map_err(IoError::from)
     }
 }
 
@@ -87,18 +78,19 @@ async fn tls_handshake_and_roundtrip() {
     let private_key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_bytes));
 
     // ── 2. Build server TlsAcceptor ───────────────────────────────────────────
-    let server_cfg =
-        tpt_net_tls::config::server_config(vec![cert_der.clone()], private_key)
-            .expect("server_config failed");
+    let server_cfg = tpt_net_tls::config::server_config(vec![cert_der.clone()], private_key)
+        .expect("server_config failed");
     let acceptor = TlsAcceptor::new(server_cfg);
 
     // ── 3. Build client TlsConnector with custom root (the self-signed cert) ──
     let mut root_store = rustls::RootCertStore::empty();
-    root_store.add(cert_der).expect("failed to add cert to root store");
+    root_store
+        .add(cert_der)
+        .expect("failed to add cert to root store");
 
-    let client_cfg = rustls::ClientConfig::builder_with_provider(
-        Arc::new(rustls::crypto::ring::default_provider()),
-    )
+    let client_cfg = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
     .with_protocol_versions(&[&rustls::version::TLS13])
     .expect("TLS 1.3 must be supported")
     .with_root_certificates(root_store)

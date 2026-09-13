@@ -1,6 +1,17 @@
 [package]
 name        = "tpt-async-macros"
 description = "Proc-macro crate providing #[tpt_async::main] for tpt-async"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["async", "macros"]
+categories    = ["asynchronous", "development-tools"]
 workspace   = "../.."
 
 [lib]

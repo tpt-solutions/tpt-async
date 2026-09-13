@@ -28,7 +28,8 @@
 - [x] `cargo new --lib crates/tpt-async-core`
 - [x] Set `#![no_std]` with `extern crate alloc` behind `alloc` feature flag
 - [x] Define `Spawn` trait — implemented by user's runtime or default executor
-- [x] Define `Task` and `JoinHandle<T>` types (alloc-optional)
+- [x] Define `JoinHandle<T>` + `Completer` types (alloc)
+- [ ] Define standalone `Task` type (alloc-optional) — not yet implemented
 - [x] Implement custom `RawWaker` / `Waker` construction utilities
 - [ ] Write zero-cost state machine derive helper (or macro-based)
 - [x] Define `LocalSpawn` trait for single-threaded contexts
@@ -43,7 +44,7 @@
 - [x] Set `[lib] proc-macro = true` in `Cargo.toml`
 - [x] Implement `#[tpt_async::main]` that wraps `async fn main` with the configured executor entry point
 - [ ] Support `executor = "default"` attribute arg (extensible for third-party runtimes)
-- [x] Emit compile-error on `no_std` targets (macro is std-only entry-point sugar)
+- [ ] Emit compile-error on `no_std` targets (macro is std-only entry-point sugar; currently fails only via unresolved paths)
 - [ ] Write macro expansion tests with `trybuild` or `macrotest`
 
 ### `crates/tpt-async-executor`
@@ -54,10 +55,10 @@
 - [x] Use `VecDeque` or intrusive linked-list task queue (no heap per poll)
 - [x] Implement `Spawn` trait from `tpt-async-core` for `LocalExecutor`
 - [x] Implement `LocalSpawn` trait from `tpt-async-core`
-- [x] Add `block_on(future)` free function
+- [x] Add `block_on(future)` (currently a `LocalExecutor` method, not a free function)
 - [x] No `unsafe` except where strictly required for Waker raw pointer handling; document all `unsafe` blocks
-- [x] Feature flag `work-stealing` — stubbed/reserved for Phase 2+
-- [x] Unit tests: nested spawns, waker re-use, task cancellation
+- [ ] Feature flag `work-stealing` — reserved for Phase 2+ (empty stub feature removed to avoid false advertising)
+- [ ] Unit tests: nested spawns (done), waker re-use, task cancellation (pending)
 - [ ] Benchmark vs. `tokio::task::LocalSet` with criterion
 
 ### `crates/tpt-async-timer`
@@ -70,8 +71,8 @@
 - [x] Implement `Sleep` future backed by the wheel
 - [x] Implement `Interval` future (periodic ticks)
 - [x] Implement `Timeout<F>` combinator wrapping any `Future`
-- [x] Integrate with `tpt-async-core` `Waker` for wake-on-expiry
-- [x] Provide `std` feature that hooks into system monotonic clock
+- [ ] Integrate with `tpt-async-core` `Waker` for wake-on-expiry (currently uses `core::task::Waker` directly)
+- [ ] Provide `std` feature that hooks into system monotonic clock (`StdClock` exists; not yet wired into `TimerWheel::tick`)
 - [ ] Provide `embedded-time` / `fugit` compatibility behind feature flags
 - [ ] no_std tests using `defmt-test` or `embedded-test`
 - [ ] Fuzz tick-advance with `cargo-fuzz`
@@ -96,14 +97,15 @@
 
 - [x] `cargo new --lib crates/tpt-async-io`
 - [x] Define `AsyncRead` trait — no heap, buffer passed by caller (`&mut [u8]`)
-- [x] Define `AsyncWrite` trait — vectored write (`IoSlice`) support
+- [x] Define `AsyncWrite` trait — [ ] vectored write (`IoSlice`) support still open
 - [x] Define `AsyncBufRead` trait with fill-buf / consume model
-- [x] Implement `StdCompat` adapter (wraps `std::io::Read`/`Write` in a thread-offload future)
-- [x] Implement `TokioCompat` adapter behind `tokio` feature flag
-- [ ] Implement `AsyncStdCompat` adapter behind `async-std` feature flag
+- [x] Implement `StdCompat` adapter (synchronous `poll_*` calls — non-blocking fds only)
+- [x] Implement `TokioCompat` adapter behind `tokio` feature flag (explicit `TokioReader`/`TokioWriter` wrappers)
+- [x] Implement `AsyncStdCompat` adapter behind `async-std` feature flag
 - [ ] Bare-metal adapter: register-mapped I/O via `embedded-hal-async` behind feature flag
-- [x] Zero-copy `ReadBuf` type (non-allocating, tracks initialized bytes)
-- [x] Integration tests for each adapter pairing (std↔tokio, etc.)
+- [x] Zero-copy `ReadBuf` type (non-allocating; tracks the filled sub-slice, not per-byte init state)
+- [ ] Integration tests for each adapter pairing (std↔tokio, etc.)
+- [x] `AsyncReadExt`/`AsyncWriteExt` helpers (`read_exact`, `read_to_end`, `write_all`, `flush`, `shutdown`)
 
 ### `crates/tpt-net-tls`
 > rustls 0.23 wrapper; no OpenSSL, no ring fallback
@@ -166,13 +168,13 @@
   - [x] `x86_64-pc-windows-msvc` — stable (`cargo test --workspace`)
   - [x] `thumbv7em-none-eabihf` — stable (`cargo build --no-std` check crates)
   - [x] `riscv32imac-unknown-none-elf` — stable (no_std build check)
-  - [x] `wasm32-unknown-unknown` — stable (`cargo build` + `wasm-pack test --headless`)
+  - [x] `wasm32-unknown-unknown` — stable (`cargo build` only; `wasm-pack test --headless` still open)
 - [x] `cargo clippy --workspace --all-features -- -D warnings` in CI
 - [x] `cargo fmt --check` in CI
 - [x] `cargo doc --workspace --no-deps` — no warnings in CI
 - [x] `cargo deny check` — license + advisory audit in CI
 - [x] `cargo test --workspace` with `nextest` for faster output
-- [ ] Dependabot or Renovate for automated dependency PRs
+- [x] Dependabot or Renovate for automated dependency PRs (`.github/dependabot.yml`, weekly, rustls patch-only)
 - [ ] `.cargo/audit.toml` pinning known-safe advisories
 
 ---

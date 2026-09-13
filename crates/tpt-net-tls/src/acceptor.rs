@@ -49,11 +49,32 @@ impl TlsAcceptor {
     where
         IO: AsyncRead + AsyncWrite + Unpin,
     {
-        let conn = ServerConnection::new(Arc::clone(&self.config))
-            .map_err(TlsError::Rustls)?;
+        let conn = ServerConnection::new(Arc::clone(&self.config)).map_err(TlsError::Rustls)?;
 
         let mut tls = TlsStream::new(stream, Connection::Server(conn));
         tls.handshake().await?;
         Ok(tls)
+    }
+
+    /// Like [`accept`](TlsAcceptor::accept), but fails with
+    /// [`TlsError::TimedOut`] if the handshake takes longer than `timeout`.
+    ///
+    /// # Errors
+    ///
+    /// [`TlsError::TimedOut`] on timeout; otherwise as for [`accept`].
+    ///
+    /// [`accept`]: TlsAcceptor::accept
+    pub async fn accept_timeout<IO>(
+        &self,
+        stream: IO,
+        timeout: core::time::Duration,
+    ) -> Result<TlsStream<IO>, TlsError>
+    where
+        IO: AsyncRead + AsyncWrite + Unpin,
+    {
+        match tpt_async_timer::driver::timeout(timeout, self.accept(stream)).await {
+            Ok(result) => result,
+            Err(_timed_out) => Err(TlsError::TimedOut),
+        }
     }
 }

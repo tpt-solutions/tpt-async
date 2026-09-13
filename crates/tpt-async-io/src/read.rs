@@ -1,8 +1,9 @@
 // Copyright TPT Solutions
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Async read trait and I/O error type.
+//! Async read trait, I/O error type, and extension helpers.
 
+use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
@@ -14,7 +15,7 @@ use crate::read_buf::ReadBuf;
 ///
 /// Under the `std` feature this is a thin wrapper around [`std::io::Error`],
 /// providing lossless round-trips.  Without `std` it carries an
-/// [`IoErrorKind`] tag and an optional static message.
+/// `IoErrorKind` tag and an optional static message.
 #[derive(Debug)]
 pub struct IoError {
     #[cfg(feature = "std")]
@@ -44,7 +45,10 @@ impl IoError {
     /// Shorthand: unexpected end of stream.
     #[cfg(feature = "std")]
     pub fn unexpected_eof() -> Self {
-        Self::new(std::io::ErrorKind::UnexpectedEof, "unexpected end of stream")
+        Self::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "unexpected end of stream",
+        )
     }
 
     /// Shorthand: write returned zero bytes.
@@ -111,13 +115,21 @@ impl From<IoError> for std::io::Error {
 #[cfg(not(feature = "std"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IoErrorKind {
+    /// Unexpected end of stream.
     UnexpectedEof,
+    /// Write returned zero bytes.
     WriteZero,
+    /// The operation would block.
     WouldBlock,
+    /// The write side of a pipe/connection is closed.
     BrokenPipe,
+    /// The connection was reset by the peer.
     ConnectionReset,
+    /// The connection was aborted locally.
     ConnectionAborted,
+    /// The operation timed out.
     TimedOut,
+    /// Anything else.
     Other,
 }
 
@@ -152,34 +164,146 @@ impl<T: AsyncRead + Unpin + ?Sized> AsyncRead for &mut T {
     }
 }
 
-// ── tokio bridge (optional) ───────────────────────────────────────────────────
+// ── AsyncReadExt ──────────────────────────────────────────────────────────────
 
-#[cfg(feature = "tokio")]
-mod tokio_bridge_read {
-    use super::*;
-
-    /// Blanket impl: any `tokio::io::AsyncRead + Unpin` type becomes an
-    /// `AsyncRead`.
-    impl<T> AsyncRead for T
+/// Extension helpers over [`AsyncRead`], mirroring the ergonomics of
+/// `futures::io::AsyncReadExt` and `tokio::io::AsyncReadExt`.
+///
+/// The extension futures are allocation-free except for
+/// [`read_to_end`](AsyncReadExt::read_to_end), which requires the `alloc`
+/// feature.
+pub trait AsyncReadExt: AsyncRead {
+    /// Reads whatever bytes are currently available into `buf`, returning
+    /// the number of bytes read *this call*.
+    ///
+    /// Returns `Ok(0)` on end-of-stream.
+    fn read<'a>(&'a mut self, buf: &'a mut ReadBuf<'a>) -> Read<'a, Self>
     where
-        T: tokio::io::AsyncRead + Unpin,
+        Self: Sized + Unpin,
     {
-        fn poll_read(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<Result<(), IoError>> {
-            let mut tbuf = tokio::io::ReadBuf::new(buf.unfilled());
-            let result = tokio::io::AsyncRead::poll_read(self, cx, &mut tbuf);
-            let filled = tbuf.filled().len();
-            match result {
+        Read { reader: self, buf }
+    }
+
+    /// Reads exactly `buf.len()` bytes into `buf`, or fails with
+    /// [`IoError::unexpected_eof`] if the stream ends first.
+    fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> ReadExact<'a, Self>
+    where
+        Self: Sized + Unpin,
+    {
+        ReadExact {
+            reader: self,
+            buf,
+            pos: 0,
+        }
+    }
+
+    /// Reads until end-of-stream, appending to `out`.
+    ///
+    /// Requires the `alloc` feature.
+    #[cfg(feature = "alloc")]
+    fn read_to_end<'a>(&'a mut self, out: &'a mut alloc::vec::Vec<u8>) -> ReadToEnd<'a, Self>
+    where
+        Self: Sized + Unpin,
+    {
+        ReadToEnd { reader: self, out }
+    }
+}
+
+impl<R: AsyncRead + ?Sized> AsyncReadExt for R {}
+
+/// Future returned by [`AsyncReadExt::read`].
+pub struct Read<'a, R: ?Sized> {
+    reader: &'a mut R,
+    buf: &'a mut ReadBuf<'a>,
+}
+
+impl<R: AsyncRead + Unpin + ?Sized> Future for Read<'_, R> {
+    type Output = Result<usize, IoError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let before = this.buf.filled().len();
+        match Pin::new(&mut *this.reader).poll_read(cx, this.buf) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(this.buf.filled().len() - before)),
+        }
+    }
+}
+
+/// Future returned by [`AsyncReadExt::read_exact`].
+pub struct ReadExact<'a, R: ?Sized> {
+    reader: &'a mut R,
+    buf: &'a mut [u8],
+    pos: usize,
+}
+
+impl<R: AsyncRead + Unpin + ?Sized> Future for ReadExact<'_, R> {
+    type Output = Result<(), IoError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        loop {
+            if this.pos >= this.buf.len() {
+                return Poll::Ready(Ok(()));
+            }
+            let mut rb = ReadBuf::new(&mut this.buf[this.pos..]);
+            match Pin::new(&mut *this.reader).poll_read(cx, &mut rb) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
                 Poll::Ready(Ok(())) => {
-                    buf.advance(filled);
-                    Poll::Ready(Ok(()))
+                    let n = rb.filled().len();
+                    if n == 0 {
+                        return Poll::Ready(Err(IoError::unexpected_eof()));
+                    }
+                    this.pos += n;
                 }
-                Poll::Ready(Err(e)) => Poll::Ready(Err(IoError::from(e))),
-                Poll::Pending => Poll::Pending,
             }
         }
     }
 }
+
+/// Future returned by [`AsyncReadExt::read_to_end`].
+#[cfg(feature = "alloc")]
+pub struct ReadToEnd<'a, R: ?Sized> {
+    reader: &'a mut R,
+    out: &'a mut alloc::vec::Vec<u8>,
+}
+
+#[cfg(feature = "alloc")]
+impl<R: AsyncRead + Unpin + ?Sized> Future for ReadToEnd<'_, R> {
+    type Output = Result<(), IoError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        const CHUNK: usize = 4096;
+        let this = self.get_mut();
+        loop {
+            let base = this.out.len();
+            this.out.resize(base + CHUNK, 0);
+            let mut rb = ReadBuf::new(&mut this.out[base..]);
+            match Pin::new(&mut *this.reader).poll_read(cx, &mut rb) {
+                Poll::Pending => {
+                    this.out.truncate(base);
+                    return Poll::Pending;
+                }
+                Poll::Ready(Err(e)) => {
+                    this.out.truncate(base);
+                    return Poll::Ready(Err(e));
+                }
+                Poll::Ready(Ok(())) => {
+                    let n = rb.filled().len();
+                    this.out.truncate(base + n);
+                    if n == 0 {
+                        return Poll::Ready(Ok(())); // EOF
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── legacy tokio blanket bridge (removed) ─────────────────────────────────────
+//
+// A blanket `impl<T: tokio::io::AsyncRead> AsyncRead for T` conflicts with the
+// `&mut T` impl above (E0119) and locks out downstream manual impls. Use the
+// explicit [`crate::TokioReader`] wrapper instead.

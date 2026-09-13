@@ -1,23 +1,29 @@
 [package]
 name        = "tpt-net-ws"
-description = "Pure-Rust WebSocket framing, masking, and ping/pong management (client and server) for tpt-async"
+description = "Pure-Rust WebSocket (RFC 6455) framing, masking, and ping/pong management for tpt-async"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["websocket", "async", "network"]
+categories    = ["network-programming", "web-programming::websocket"]
 workspace   = "../.."
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[features]
-default              = []
-permessage-deflate   = ["dep:flate2"]
-
 [dependencies]
 tpt-async-core  = { workspace = true }
 tpt-async-io    = { workspace = true }
 tpt-async-timer = { workspace = true }
 tpt-net-http    = { workspace = true }
-flate2          = { version = "1", optional = true }
 
 [dev-dependencies]
-tokio    = { version = "1", features = ["full"] }
-rcgen    = { workspace = true, features = ["pem"] }
+tokio = { version = "1", features = ["full"] }
+rcgen = { workspace = true }

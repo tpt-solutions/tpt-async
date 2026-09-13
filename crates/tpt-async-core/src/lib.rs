@@ -5,7 +5,7 @@
 //!
 //! | Flag    | Default | What it enables |
 //! |---------|---------|-----------------|
-//! | `alloc` | yes     | [`JoinHandle`], [`Completer`], heap-backed shared task state |
+//! | `alloc` | yes     | [`JoinHandle`](task::JoinHandle), [`Completer`](task::Completer), heap-backed shared task state |
 //! | `std`   | no      | `std::error::Error` impls on error types |
 
 #![no_std]
@@ -17,7 +17,7 @@
 extern crate alloc;
 
 pub mod error;
+pub mod prelude;
 pub mod spawn;
 pub mod task;
 pub mod waker;
-pub mod prelude;

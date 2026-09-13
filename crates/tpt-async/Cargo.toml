@@ -1,6 +1,17 @@
 [package]
 name        = "tpt-async"
 description = "Runtime-agnostic async I/O facade — re-exports tpt_async::prelude from all tpt-async crates"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+homepage      = { workspace = true }
+documentation = { workspace = true }
+readme        = "../../README.md"
+keywords      = ["async", "runtime-agnostic", "no_std"]
+categories    = ["asynchronous", "embedded"]
 workspace   = "../.."
 
 [package.metadata.docs.rs]
@@ -13,7 +24,9 @@ alloc    = ["tpt-async-core/alloc", "tpt-async-timer/alloc"]
 std      = ["alloc", "tpt-async-core/std", "tpt-async-timer/std"]
 executor = ["dep:tpt-async-executor"]
 timer    = ["dep:tpt-async-timer"]
-macros   = ["dep:tpt-async-macros"]
+# The macro expands to `tpt_async::__private::LocalExecutor`, so it needs the
+# executor compiled in.
+macros   = ["dep:tpt-async-macros", "executor"]
 
 [dependencies]
 tpt-async-core     = { workspace = true }

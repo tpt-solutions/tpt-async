@@ -8,10 +8,15 @@
 //!
 //! | Flag        | Default | What it enables |
 //! |-------------|---------|-----------------|
-//! | `alloc`     | yes     | heap-backed impls |
+//! | `alloc`     | yes     | heap-backed impls (e.g. `AsyncReadExt::read_to_end`) |
 //! | `std`       | yes     | wraps `std::io::Error` in `IoError`, enables `std::error::Error` |
-//! | `tokio`     | no      | blanket `AsyncRead`/`AsyncWrite` impls for tokio types |
-//! | `async-std` | no      | blanket impls for async-std types |
+//! | `tokio`     | no      | [`TokioReader`]/[`TokioWriter`] adapters for tokio types |
+//! | `async-std` | no      | [`AsyncStdReader`]/[`AsyncStdWriter`] adapters for async-std types |
+//!
+//! Tokio and async-std types do **not** implement our traits via blanket
+//! impls; wrap them explicitly (`TokioReader::new(stream)`), which keeps
+//! coherence clean and lets downstream crates implement our traits for their
+//! own tokio-compatible types without conflicts.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -21,10 +26,26 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-pub mod read_buf;
+pub mod adapters;
+/// Async counterpart of `std::io::BufRead` for zero-copy parsing.
+pub mod buf;
+pub mod prelude;
 pub mod read;
+pub mod read_buf;
 pub mod write;
 
+pub use buf::AsyncBufRead;
+#[cfg(not(feature = "std"))]
+pub use read::IoErrorKind;
+pub use read::{AsyncRead, AsyncReadExt, IoError};
 pub use read_buf::ReadBuf;
-pub use read::{AsyncRead, IoError};
-pub use write::AsyncWrite;
+pub use write::{AsyncWrite, AsyncWriteExt};
+
+#[cfg(feature = "async-std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async-std")))]
+pub use adapters::async_std_compat::{AsyncStdReader, AsyncStdWriter};
+#[cfg(feature = "std")]
+pub use adapters::std_compat::{StdReader, StdWriter};
+#[cfg(feature = "tokio")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
+pub use adapters::tokio_compat::{TokioReader, TokioWriter};

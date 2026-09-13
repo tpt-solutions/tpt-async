@@ -11,30 +11,23 @@
 //! | `alloc`    | yes     | `JoinHandle`, `Completer` |
 //! | `executor` | yes     | `LocalExecutor`, `block_on` |
 //! | `timer`    | yes     | `Sleep`, `Interval`, `Timeout`, `TimerWheel` |
-//! | `macros`   | no      | re-export of `#[tpt_async::main]` |
+//! | `macros`   | no      | `#[tpt_async::main]` (implies `executor`) |
 //!
 //! # Example
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use tpt_async::prelude::*;
-//! use tpt_net_http::prelude::*;
 //!
-//! #[tpt_async::main]
-//! async fn main() {
-//!     let client = HttpClient::builder()
-//!         .tls(tpt_net_tls::rustls_config())
-//!         .build();
-//!
-//!     let response = client
-//!         .get("https://api.tpt.solutions/health")
-//!         .timeout(Duration::from_millis(500))
-//!         .send()
-//!         .await
-//!         .unwrap();
-//!
-//!     println!("Status: {}", response.status());
-//! }
+//! let executor = LocalExecutor::new();
+//! executor.block_on(async {
+//!     // The timer crate's std driver makes sleep/timeout just work:
+//!     sleep(core::time::Duration::from_millis(10)).await;
+//!     println!("hello from tpt-async");
+//! });
 //! ```
+//!
+//! With `features = ["macros"]`, `#[tpt_async::main]` wraps an `async fn
+//! main` in exactly this executor for you.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -44,6 +37,17 @@
 #[cfg(feature = "macros")]
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 pub use tpt_async_macros::main;
+
+/// Implementation detail of `#[tpt_async::main]`.
+///
+/// The proc-macro expands to this module's paths so that user crates only
+/// need a dependency on the facade (which internally owns the executor).
+/// Semver-exempt: anything in here can change between releases.
+#[cfg(feature = "executor")]
+#[doc(hidden)]
+pub mod __private {
+    pub use tpt_async_executor::LocalExecutor;
+}
 
 pub mod prelude {
     //! The `tpt-async` prelude.
@@ -65,7 +69,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "timer")))]
     pub use tpt_async_timer::prelude::*;
 
-    // Duration re-export for convenience (std path)
-    #[cfg(feature = "std")]
+    // `Duration` lives in core; useful everywhere.
     pub use core::time::Duration;
 }

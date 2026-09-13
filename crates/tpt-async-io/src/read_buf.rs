@@ -21,6 +21,13 @@ impl<'a> ReadBuf<'a> {
         Self { buf, filled: 0 }
     }
 
+    /// Resets the filled cursor to zero so the same storage can be reused
+    /// for another read.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.filled = 0;
+    }
+
     /// Returns the filled sub-slice (bytes written so far).
     #[inline]
     pub fn filled(&self) -> &[u8] {

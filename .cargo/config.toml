@@ -1,0 +1,6 @@
+[alias]
+# Build the no_std check targets
+check-embedded = "build --target thumbv7em-none-eabihf -p tpt-async-core -p tpt-async-timer"
+check-riscv    = "build --target riscv32imac-unknown-none-elf -p tpt-async-core -p tpt-async-timer"
+check-wasm     = "build --target wasm32-unknown-unknown -p tpt-async-core -p tpt-async-timer -p tpt-async-executor"
+check-all      = "clippy --workspace --all-features -- -D warnings"

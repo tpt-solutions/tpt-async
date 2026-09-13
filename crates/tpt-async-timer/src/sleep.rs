@@ -79,6 +79,13 @@ impl<'a, const SLOTS: usize, const LEVELS: usize> Sleep<'a, SLOTS, LEVELS> {
         self.entry = TimerEntry::new(deadline);
         self.registered = false;
     }
+
+    /// Pinned variant of [`reset`](Self::reset) for use through
+    /// `Pin<&mut Sleep>` (e.g. when the future is pinned on the stack).
+    pub fn reset_pinned(self: core::pin::Pin<&mut Self>, deadline: u64) {
+        // SAFETY: reset only mutates through `&mut self`; we never move out.
+        unsafe { self.get_unchecked_mut() }.reset(deadline);
+    }
 }
 
 impl<const SLOTS: usize, const LEVELS: usize> Future for Sleep<'_, SLOTS, LEVELS> {

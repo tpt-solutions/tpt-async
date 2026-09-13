@@ -1,0 +1,25 @@
+[package]
+name        = "embedded-examples"
+description = "no_std Cortex-M example for the tpt-async stack (thumbv7em-none-eabihf)"
+version       = "0.1.0"
+edition       = "2021"
+rust-version  = "1.75"
+license       = "MIT OR Apache-2.0"
+authors       = ["TPT Solutions <opensource@tpt.solutions>"]
+repository    = "https://github.com/tpt-solutions/tpt-async"
+publish       = false
+
+[[bin]]
+name = "heartbeat"
+path = "src/main.rs"
+
+[dependencies]
+tpt-async-timer = { path = "../../crates/tpt-async-timer", default-features = false }
+cortex-m        = "0.7"
+cortex-m-rt     = "0.7"
+panic-halt      = "1"
+embedded-hal    = "1"
+
+# Board-independent on purpose: no HAL is pulled in. `heartbeat_count` below
+# is a static a debugger can watch, or wire an LED into `board_tick()` on
+# your board.

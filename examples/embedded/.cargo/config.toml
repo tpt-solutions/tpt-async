@@ -1,0 +1,10 @@
+# Bare-metal Cortex-M link setup for cortex-m-rt (provides `_start`/vector table).
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+rustflags = [
+    "-C",
+    "link-arg=-Tlink.x",
+]
+
+[alias]
+rrun = "run --release --target thumbv7em-none-eabihf"
+rbuild = "build --release --target thumbv7em-none-eabihf"

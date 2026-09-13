@@ -1,0 +1,8 @@
+[template]
+description = "A ready-to-hack binary project on the tpt-async runtime-agnostic async stack"
+include = ["Cargo.toml", "src/*", "README.md", ".gitignore"]
+
+[placeholders]
+description = { type = "string", prompt = "Project description?", default = "A tpt-async application" }
+
+[conditions]

@@ -27,9 +27,26 @@ timer    = ["dep:tpt-async-timer"]
 # The macro expands to `tpt_async::__private::LocalExecutor`, so it needs the
 # executor compiled in.
 macros   = ["dep:tpt-async-macros", "executor"]
+# Async I/O traits + extension helpers.
+io       = ["dep:tpt-async-io", "tpt-async-io/std"]
+# TLS (implies io).
+tls      = ["dep:tpt-net-tls", "io"]
+# Ready-made `Spawn` adapters so "bring your own runtime" is zero-boilerplate.
+spawn-tokio = ["dep:tokio"]
+spawn-smol  = ["dep:smol", "io"]
 
 [dependencies]
 tpt-async-core     = { workspace = true }
 tpt-async-macros   = { workspace = true, optional = true }
 tpt-async-executor = { workspace = true, optional = true }
 tpt-async-timer    = { workspace = true, optional = true }
+tpt-async-io       = { workspace = true, optional = true }
+tpt-net-tls        = { workspace = true, optional = true }
+tokio              = { version = "1", features = ["rt"], optional = true }
+smol               = { version = "2", optional = true }
+
+# `#[tpt_async::main]` consumer regression test: a real binary with fn main.
+[[test]]
+name = "entrypoint"
+harness = false
+required-features = ["macros"]

@@ -1,0 +1,23 @@
+[package]
+name        = "desktop-examples"
+description = "Runnable desktop examples for the tpt-async stack"
+version       = { workspace = true }
+edition       = { workspace = true }
+rust-version  = { workspace = true }
+license       = { workspace = true }
+authors       = { workspace = true }
+repository    = { workspace = true }
+publish       = false
+
+[dependencies]
+tpt-async       = { path = "../../crates/tpt-async", features = ["io", "spawn-tokio", "macros"] }
+tpt-async-io    = { path = "../../crates/tpt-async-io", features = ["tokio"] }
+tokio           = { version = "1", features = ["rt-multi-thread", "net", "macros", "io-util", "time"] }
+
+[[bin]]
+name = "heartbeat"
+path = "src/bin/heartbeat.rs"
+
+[[bin]]
+name = "tcp-echo"
+path = "src/bin/tcp-echo.rs"

@@ -177,7 +177,11 @@ pub trait AsyncReadExt: AsyncRead {
     /// the number of bytes read *this call*.
     ///
     /// Returns `Ok(0)` on end-of-stream.
-    fn read<'a>(&'a mut self, buf: &'a mut ReadBuf<'a>) -> Read<'a, Self>
+    ///
+    /// The buffer is taken by value: the future reports the byte count
+    /// directly (callers index their slice afterwards), and reader/buffer
+    /// lifetimes stay independent so both can live in a loop.
+    fn read<'a, 'b>(&'a mut self, buf: ReadBuf<'b>) -> Read<'a, 'b, Self>
     where
         Self: Sized + Unpin,
     {
@@ -186,7 +190,7 @@ pub trait AsyncReadExt: AsyncRead {
 
     /// Reads exactly `buf.len()` bytes into `buf`, or fails with
     /// [`IoError::unexpected_eof`] if the stream ends first.
-    fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> ReadExact<'a, Self>
+    fn read_exact<'a, 'b>(&'a mut self, buf: &'b mut [u8]) -> ReadExact<'a, 'b, Self>
     where
         Self: Sized + Unpin,
     {
@@ -201,7 +205,10 @@ pub trait AsyncReadExt: AsyncRead {
     ///
     /// Requires the `alloc` feature.
     #[cfg(feature = "alloc")]
-    fn read_to_end<'a>(&'a mut self, out: &'a mut alloc::vec::Vec<u8>) -> ReadToEnd<'a, Self>
+    fn read_to_end<'a, 'b>(
+        &'a mut self,
+        out: &'b mut alloc::vec::Vec<u8>,
+    ) -> ReadToEnd<'a, 'b, Self>
     where
         Self: Sized + Unpin,
     {
@@ -212,33 +219,34 @@ pub trait AsyncReadExt: AsyncRead {
 impl<R: AsyncRead + ?Sized> AsyncReadExt for R {}
 
 /// Future returned by [`AsyncReadExt::read`].
-pub struct Read<'a, R: ?Sized> {
+pub struct Read<'a, 'b, R: ?Sized> {
     reader: &'a mut R,
-    buf: &'a mut ReadBuf<'a>,
+    buf: ReadBuf<'b>,
 }
 
-impl<R: AsyncRead + Unpin + ?Sized> Future for Read<'_, R> {
+impl<R: AsyncRead + Unpin + ?Sized> Future for Read<'_, '_, R> {
     type Output = Result<usize, IoError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let before = this.buf.filled().len();
-        match Pin::new(&mut *this.reader).poll_read(cx, this.buf) {
+        match Pin::new(&mut *this.reader).poll_read(cx, &mut this.buf) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-            Poll::Ready(Ok(())) => Poll::Ready(Ok(this.buf.filled().len() - before)),
+            // `buf` was created fresh by the caller, so `filled()` is exactly
+            // the count for this read; zero bytes means end-of-stream.
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(this.buf.filled().len())),
         }
     }
 }
 
 /// Future returned by [`AsyncReadExt::read_exact`].
-pub struct ReadExact<'a, R: ?Sized> {
+pub struct ReadExact<'a, 'b, R: ?Sized> {
     reader: &'a mut R,
-    buf: &'a mut [u8],
+    buf: &'b mut [u8],
     pos: usize,
 }
 
-impl<R: AsyncRead + Unpin + ?Sized> Future for ReadExact<'_, R> {
+impl<R: AsyncRead + Unpin + ?Sized> Future for ReadExact<'_, '_, R> {
     type Output = Result<(), IoError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -265,13 +273,13 @@ impl<R: AsyncRead + Unpin + ?Sized> Future for ReadExact<'_, R> {
 
 /// Future returned by [`AsyncReadExt::read_to_end`].
 #[cfg(feature = "alloc")]
-pub struct ReadToEnd<'a, R: ?Sized> {
+pub struct ReadToEnd<'a, 'b, R: ?Sized> {
     reader: &'a mut R,
-    out: &'a mut alloc::vec::Vec<u8>,
+    out: &'b mut alloc::vec::Vec<u8>,
 }
 
 #[cfg(feature = "alloc")]
-impl<R: AsyncRead + Unpin + ?Sized> Future for ReadToEnd<'_, R> {
+impl<R: AsyncRead + Unpin + ?Sized> Future for ReadToEnd<'_, '_, R> {
     type Output = Result<(), IoError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

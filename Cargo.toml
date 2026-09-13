@@ -9,6 +9,16 @@ members = [
     "crates/tpt-net-http",
     "crates/tpt-net-ws",
     "crates/tpt-async",
+    "examples/desktop",
+]
+# Stand-alone projects that must not join the workspace build graph:
+# embedded and WASM demos target special toolchains; the template is a
+# cargo-generate scaffold; fuzz/ holds its own cargo-fuzz workspace.
+exclude = [
+    "examples/embedded",
+    "examples/wasm",
+    "templates/tpt-app",
+    "fuzz",
 ]
 resolver = "2"
 

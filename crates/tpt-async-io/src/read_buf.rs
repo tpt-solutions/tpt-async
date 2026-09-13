@@ -86,3 +86,65 @@ impl<'a> ReadBuf<'a> {
         self.filled += n;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_starts_empty() {
+        let mut storage = [0u8; 16];
+        let mut buf = ReadBuf::new(&mut storage);
+        assert_eq!(buf.filled().len(), 0);
+        assert_eq!(buf.remaining(), 16);
+        assert_eq!(buf.capacity(), 16);
+        assert_eq!(buf.unfilled().len(), 16);
+    }
+
+    #[test]
+    fn advance_tracks_filled() {
+        let mut storage = [0u8; 8];
+        let mut buf = ReadBuf::new(&mut storage);
+        buf.advance(3);
+        assert_eq!(buf.filled().len(), 3);
+        assert_eq!(buf.remaining(), 5);
+        assert_eq!(buf.unfilled().len(), 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "would exceed capacity")]
+    fn advance_past_capacity_panics() {
+        let mut storage = [0u8; 4];
+        let mut buf = ReadBuf::new(&mut storage);
+        buf.advance(5);
+    }
+
+    #[test]
+    fn put_slice_copies_and_advances() {
+        let mut storage = [0u8; 8];
+        let mut buf = ReadBuf::new(&mut storage);
+        buf.put_slice(b"abc");
+        assert_eq!(buf.filled(), b"abc");
+        buf.put_slice(b"de");
+        assert_eq!(buf.filled(), b"abcde");
+        assert_eq!(buf.remaining(), 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "exceeds remaining capacity")]
+    fn put_slice_overflow_panics() {
+        let mut storage = [0u8; 2];
+        let mut buf = ReadBuf::new(&mut storage);
+        buf.put_slice(b"abc");
+    }
+
+    #[test]
+    fn clear_resets_cursor() {
+        let mut storage = [0u8; 8];
+        let mut buf = ReadBuf::new(&mut storage);
+        buf.advance(6);
+        buf.clear();
+        assert_eq!(buf.filled().len(), 0);
+        assert_eq!(buf.remaining(), 8);
+    }
+}

@@ -48,4 +48,4 @@ pub use adapters::async_std_compat::{AsyncStdReader, AsyncStdWriter};
 pub use adapters::std_compat::{StdReader, StdWriter};
 #[cfg(feature = "tokio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
-pub use adapters::tokio_compat::{TokioReader, TokioWriter};
+pub use adapters::tokio_compat::{TokioCompat, TokioReader, TokioWriter};

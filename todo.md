@@ -130,33 +130,33 @@
 ### `crates/tpt-net-http`
 > HTTP/1.1 + HTTP/2 client/server, zero-copy header parsing
 
-- [ ] `cargo new --lib crates/tpt-net-http`
-- [ ] HTTP/1.1 parser: parse request/response line and headers directly into `&'a [u8]` slices (zero-copy)
-- [ ] HTTP/1.1 client: `HttpClient` builder pattern as shown in spec
-  - [ ] `.tls(config)` integration with `tpt-net-tls`
-  - [ ] `.timeout(Duration)` integration with `tpt-async-timer`
+- [x] `cargo new --lib crates/tpt-net-http`
+- [x] HTTP/1.1 parser: request/response heads parsed into byte ranges over an `Arc` read buffer (zero-copy, safe)
+- [x] HTTP/1.1 client: `ClientConnection` + `Request` builder (`HttpClient` holds optional TLS)
+  - [x] `.tls` integration with `tpt-net-tls` (`HttpClient::with_tls` + `connect_tls`)
+  - [x] `.timeout(Duration)` integration with `tpt-async-timer` (TLS connect/accept timeouts; request timeouts via `tpt_async::timeout`)
   - [ ] Connection pooling (bounded, configurable)
   - [ ] Redirect following (max-hops configurable)
-- [ ] HTTP/1.1 server: `HttpServer` with `Router` and handler trait
+- [x] HTTP/1.1 server: `serve_connection` keep-alive loop with RPITIT `Handler` trait (Router still open)
 - [ ] HTTP/2 client and server (behind `http2` feature flag, using `h2` crate or hand-rolled hpack)
-- [ ] `Response` type with streaming body support (`AsyncRead`)
-- [ ] `Request` builder ergonomics (headers, query params, body)
+- [x] Streaming body readers (`Content-Length`, chunked, EOF-framed) with size caps
+- [x] `Request` builder (method, target, headers, body; host/content-length auto-added)
 - [ ] Spec compliance: RFC 7230/7231 (1.1) and RFC 7540 (2) edge cases tested
-- [ ] Fuzz HTTP parser with `cargo-fuzz`
+- [ ] Fuzz HTTP parser with `cargo-fuzz` (still open)
 - [ ] Benchmark against `hyper` and `ureq` on throughput and latency
 
 ### `crates/tpt-net-ws`
 > Pure-Rust WebSocket framing, masking, ping/pong (client + server)
 
-- [ ] `cargo new --lib crates/tpt-net-ws`
-- [ ] WebSocket upgrade handshake (HTTP → WS) — client and server
-- [ ] Frame parser/serialiser: text, binary, continuation, ping, pong, close
-- [ ] Masking/unmasking for client frames (RFC 6455 §5.3)
-- [ ] `WebSocketStream` type wrapping `tpt-async-io` transport
-- [ ] Auto ping/pong keepalive with `tpt-async-timer`
-- [ ] Max frame size limit (configurable, default 16 MiB)
+- [x] `cargo new --lib crates/tpt-net-ws`
+- [x] WebSocket upgrade handshake (HTTP → WS) — client and server (SHA-1 accept via RustCrypto, known-answer tested)
+- [x] Frame parser/serialiser: text, binary, continuation, ping, pong, close (bounds-checked, role-checked masking)
+- [x] Masking/unmasking for client frames (RFC 6455 §5.3)
+- [x] `WebSocketStream` type wrapping `tpt-async-io` transport (fragmentation assembly, auto-pong, close handshake)
+- [x] Ping answered with Pong automatically (timer-driven keepalive scheduling still open)
+- [x] Max frame size limit (16 MiB, configurable constant)
 - [ ] Per-message deflate extension behind `permessage-deflate` feature flag
-- [ ] Integration tests: echo server, fragmented messages, close handshake
+- [x] Integration tests: echo server (duplex), control frames, close handshake; fragmentation assembly covered in recv (dedicated fragment test still open)
 - [ ] Autobahn test suite pass (run via Docker in CI)
 
 ---

@@ -23,7 +23,10 @@ tpt-async-core  = { workspace = true }
 tpt-async-io    = { workspace = true }
 tpt-async-timer = { workspace = true }
 tpt-net-http    = { workspace = true }
+sha1            = "0.10"
+getrandom       = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+tpt-async-io = { workspace = true, features = ["tokio"] }
 rcgen = { workspace = true }

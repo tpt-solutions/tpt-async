@@ -56,4 +56,6 @@ proc-macro2        = "1"
 quote              = "1"
 syn                = { version = "2", features = ["full"] }
 criterion          = { version = "0.5", features = ["html_reports"] }
+sha1               = "0.10"
+getrandom          = { version = "0.2", features = ["js"] }
 trybuild           = "1"

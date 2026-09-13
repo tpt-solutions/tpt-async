@@ -68,7 +68,7 @@ pub mod runtime {
     /// Spawn on a tokio runtime through the unified [`Spawn`](tpt_async_core::spawn::Spawn)
     /// trait.
     ///
-    /// The [`TokioHandle`] newtype exists because neither the trait nor
+    /// The [`TokioHandle`](tokio_support::TokioHandle) newtype exists because neither the trait nor
     /// `tokio::runtime::Handle` is defined in this crate (orphan rule); it
     /// dereferences to the inner handle, so it can be used transparently.
     #[cfg(feature = "spawn-tokio")]

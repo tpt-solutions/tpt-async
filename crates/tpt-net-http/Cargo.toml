@@ -23,8 +23,10 @@ tpt-async-core   = { workspace = true }
 tpt-async-io     = { workspace = true }
 tpt-async-timer  = { workspace = true }
 tpt-net-tls      = { workspace = true }
+rustls           = { workspace = true, features = ["ring", "std"] }
 
 [dev-dependencies]
 tokio     = { version = "1", features = ["full"] }
+tpt-async-io = { workspace = true, features = ["tokio"] }
 rcgen     = { workspace = true }
 criterion = { workspace = true }

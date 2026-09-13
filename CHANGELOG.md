@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tpt-net-http` / `tpt-net-ws`: crate skeletons — the HTTP/1.1 and WebSocket implementations land in an upcoming release
 - `tpt-async`: facade crate re-exporting `tpt_async::prelude`
 
+### Added (continued)
+- `tpt-net-http`: HTTP/1.1 zero-copy parser (`Arc` + byte ranges), `ClientConnection`/`Request`/`Response`, keep-alive `serve_connection` with RPITIT `Handler`, strict framing (rejects conflicting Content-Length, TE+CL, obs-fold), chunked + Content-Length + EOF bodies, TLS via `HttpClient::with_tls`
+- `tpt-net-ws`: RFC 6455 `WebSocketStream` — opening handshake (client + server), frame codec with role-checked masking and 16 MiB cap, fragmentation assembly, auto-pong, closing handshake
+- `tpt-async` facade: `io`/`tls` features, `spawn-tokio`/`spawn-smol` adapters, timer `sleep`/`timeout`/`interval` at the crate root
+- Examples: desktop `heartbeat` + `tcp-echo` (tokio interop), Cortex-M `no_std` firmware demo, WASM demo, cargo-generate template
+- CI: coverage (cargo-llvm-cov), cargo-semver-checks, tag-triggered release workflow with ordered publish
+
 ### Fixed
 - All crate manifests now inherit `version`/`edition`/`rust-version`/`license`/`authors`/`repository` from `[workspace.package]` (crates previously declared no edition — silently defaulting to 2015 — and no license, which would block crates.io publish)
 - `tpt-async-io`: wired the previously undeclared `buf` (AsyncBufRead), `adapters`, and `prelude` modules; adapters now compile (`IoError::from` instead of the nonexistent `IoError::Std`, `poll_shutdown` instead of `poll_close`)

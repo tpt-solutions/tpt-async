@@ -1,0 +1,47 @@
+name: Size report
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  # Keeps the "small footprint" claims honest: workspace dep count, release
+  # binary size of the desktop examples, and wasm artifact size.
+  size-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Dependency count
+        run: |
+          {
+            echo "### Workspace dependency graph"
+            echo '```'
+            echo "total crates (incl. transitive): $(cargo tree --workspace --all-features | wc -l)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release binary sizes
+        run: |
+          cargo build --release -p desktop-examples
+          {
+            echo "### Release binary sizes"
+            echo '```'
+            ls -la target/release/heartbeat target/release/tcp-echo | awk '{print $9, $5}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: WASM artifact size
+        run: |
+          cargo build -p wasm-example --target wasm32-unknown-unknown
+          {
+            echo "### WASM artifact (debug, unoptimized)"
+            echo '```'
+            ls -la target/wasm32-unknown-unknown/debug/*.wasm | awk '{print $9, $5}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

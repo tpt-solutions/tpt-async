@@ -9,7 +9,9 @@ members = [
     "crates/tpt-net-http",
     "crates/tpt-net-ws",
     "crates/tpt-async",
+    "crates/tpt-async-test",
     "examples/desktop",
+    "xtask",
 ]
 # Stand-alone projects that must not join the workspace build graph:
 # embedded and WASM demos target special toolchains; the template is a
@@ -39,7 +41,7 @@ categories    = ["asynchronous", "embedded", "network-programming", "no-std"]
 tpt-async-core     = { path = "crates/tpt-async-core",     version = "0.1.0", default-features = false }
 tpt-async-macros   = { path = "crates/tpt-async-macros",   version = "0.1.0" }
 tpt-async-executor = { path = "crates/tpt-async-executor", version = "0.1.0" }
-tpt-async-timer    = { path = "crates/tpt-async-timer",    version = "0.1.0" }
+tpt-async-timer    = { path = "crates/tpt-async-timer",    version = "0.1.0", default-features = false }
 tpt-async-io       = { path = "crates/tpt-async-io",       version = "0.1.0" }
 tpt-net-tls        = { path = "crates/tpt-net-tls",        version = "0.1.0" }
 tpt-net-http       = { path = "crates/tpt-net-http",       version = "0.1.0" }

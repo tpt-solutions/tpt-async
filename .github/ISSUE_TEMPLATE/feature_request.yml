@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an idea for the tpt-async stack
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to build? What is missing?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Does this respect the workspace invariants?
+      description: no `async-trait`, no OpenSSL, `no_std` where advertised, MSRV 1.75
+      options:
+        - label: Yes, or N/A
+          required: true

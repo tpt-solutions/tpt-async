@@ -1,0 +1,24 @@
+name: Release automation
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # release-plz opens a "chore: release" PR that bumps lock-step versions
+  # across all 9 crates and appends CHANGELOG entries; when that PR merges,
+  # the second job publishes each crate to crates.io in dependency order.
+  # Requires: CARGO_REGISTRY_TOKEN secret, and the GitHub App/token perms
+  # for creating PRs (see https://release-plz.dev/docs/github).
+  release-plz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Open release PR (or publish on merge)
+        uses: MarcoIeni/release-plz-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

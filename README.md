@@ -100,8 +100,12 @@ impl Handler<TokioCompat<tokio::io::DuplexStream>> for Health {
 ```
 
 Everything above runs over **any** transport: tokio sockets via `TokioCompat`,
-TLS via `tpt-net-tls`, or in-memory pipes (the integration tests do exactly
-that — client against server, no sockets).
+TLS via `tpt-net-tls`, or in-memory pipes.
+
+A fully runnable version of this — HTTP client ↔ server plus a WebSocket
+echo over in-memory pipes — lives in
+[`examples/desktop/src/bin/http-ws.rs`](examples/desktop/src/bin/http-ws.rs):
+`cargo run -p desktop-examples --bin http-ws`.
 
 ## Status & Roadmap
 

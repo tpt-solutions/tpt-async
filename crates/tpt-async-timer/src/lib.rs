@@ -50,6 +50,9 @@ pub mod clock;
 pub mod driver;
 pub mod interval;
 pub mod prelude;
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+pub mod retry;
 pub mod sleep;
 pub mod timeout;
 pub mod wheel;

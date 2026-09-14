@@ -12,6 +12,8 @@ publish       = false
 [dependencies]
 tpt-async       = { path = "../../crates/tpt-async", features = ["io", "spawn-tokio", "macros"] }
 tpt-async-io    = { path = "../../crates/tpt-async-io", features = ["tokio"] }
+tpt-net-http    = { path = "../../crates/tpt-net-http" }
+tpt-net-ws      = { path = "../../crates/tpt-net-ws" }
 tokio           = { version = "1", features = ["rt-multi-thread", "net", "macros", "io-util", "time"] }
 
 [[bin]]
@@ -21,3 +23,7 @@ path = "src/bin/heartbeat.rs"
 [[bin]]
 name = "tcp-echo"
 path = "src/bin/tcp-echo.rs"
+
+[[bin]]
+name = "http-ws"
+path = "src/bin/http-ws.rs"

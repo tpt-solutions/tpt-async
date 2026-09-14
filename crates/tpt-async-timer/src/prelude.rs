@@ -10,3 +10,5 @@ pub use crate::wheel::TimerWheel;
 pub use crate::clock::StdClock;
 #[cfg(feature = "std")]
 pub use crate::driver::{interval, sleep, timeout};
+#[cfg(feature = "std")]
+pub use crate::retry::{retry, RetryPolicy};

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Conventional commit check: feat|fix|docs|test|chore|refactor|perf|ci(: scope)?
+set -e
+if ! grep -qE '^(feat|fix|docs|test|chore|refactor|perf|ci|revert)(\([a-z0-9-]+\))?!?: ' "$1"; then
+  echo "commit message must follow Conventional Commits: type(scope)?: description" >&2
+  echo "see CONTRIBUTING.md" >&2
+  exit 1
+fi

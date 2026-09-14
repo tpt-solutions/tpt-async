@@ -24,6 +24,21 @@ Thank you for your interest in contributing!
 ## Commit style
 
 Use conventional commits: `feat:`, `fix:`, `docs:`, `test:`, `chore:`.
+A commit-msg hook enforces this (see below).
+
+## Local automation
+
+- `cargo xtask ci` reproduces the full CI matrix in one command (fmt,
+  clippy, tests, docs, cross-target builds, cargo-deny).
+- Recommended: install the git hooks to get fmt/clippy + commit-message
+  checks on every commit:
+
+  ```sh
+  git config core.hooksPath .githooks
+  ```
+
+- Open issues with the bug/feature templates; PRs use the PR template and
+  should keep `CHANGELOG.md` updated for user-visible changes.
 
 ## License
 

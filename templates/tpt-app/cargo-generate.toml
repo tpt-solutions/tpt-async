@@ -4,5 +4,6 @@ include = ["Cargo.toml", "src/*", "README.md", ".gitignore"]
 
 [placeholders]
 description = { type = "string", prompt = "Project description?", default = "A tpt-async application" }
+variant = { type = "string", prompt = "Profile? (desktop | embedded | wasm)", default = "desktop", choices = ["desktop", "embedded", "wasm"] }
 
 [conditions]

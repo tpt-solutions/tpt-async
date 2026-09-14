@@ -214,24 +214,24 @@
 
 ## Innovative additions (from adoption/usability review)
 
-- [ ] `tpt-async-test` crate — deterministic fake clock (manually-advanced, built on the existing timer wheel) + fake I/O pair for testing timeouts/retries without wall-clock sleeps
-- [ ] `Spawn`/I/O adapter for `embassy` — makes the I/O/HTTP/WS stack usable inside embassy embedded projects, distinct audience from the current timer-only embedded example
-- [ ] HTTP client retry/backoff combinator built on `Timeout` — showcases the timer crate
-- [ ] `tracing`/`defmt` integration behind a feature flag
-- [ ] CI job tracking binary size / dep count per crate (`cargo bloat` / `twiggy` for wasm) and publishing it as a README badge — makes the "2 MB RAM, no 150-crate tree" claims verifiable
+- [x] `tpt-async-test` crate — `TestDriver` (manually-advanced wheel) + `io_pair` fake I/O with waker-based wakeup; 6 tests
+- [ ] `Spawn`/I/O adapter for `embassy` — I/O side DONE (`EmbeddedIo` over `embedded-io-async`); the Spawn side needs embassy-executor review: our `Spawn::spawn` returns a `JoinHandle`, which embassy's fire-and-forget `Spawner::spawn` (SpawnToken) cannot provide — implement as a documented `spawn_fire_and_forget(spawner, fut)` helper instead of a trait impl
+- [x] HTTP-agnostic `retry` + `RetryPolicy` (exponential backoff, capped) in `tpt-async-timer` (std feature), built on the driver's `sleep`
+- [ ] `tracing`/`defmt` integration behind a feature flag (approach: `defmt-03` feature adding `defmt::Format` impls to error types in core/io/tls/http/ws; `tracing` feature adding optional spans in executor/net crates) — still open
+- [x] CI job tracking dep count + release/wasm artifact sizes into the job summary (`.github/workflows/size.yml`); README badge still open
 
 ## Usability / automation (from adoption/usability review)
 
-- [ ] Replace `.cargo/config.toml` check aliases with an `cargo xtask` (e.g. `cargo xtask ci`) so contributors can reproduce the full CI matrix locally in one command
-- [ ] Add a pre-commit hook (`cargo-husky` or similar) running `fmt --check` + `clippy`
-- [ ] Set up `cargo release` or `release-plz` for lock-step versioning/publish across all 9 crates instead of manual per-crate `cargo publish --dry-run`
-- [ ] Add `.github/ISSUE_TEMPLATE/` (bug report, feature request) and `PULL_REQUEST_TEMPLATE.md`; reference them from `CONTRIBUTING.md`
-- [ ] Label well-scoped open `todo.md` items (e.g. `IoSlice` support, redirect following) as `good first issue`
+- [x] `cargo xtask ci` (xtask crate: fmt, clippy, test, docs, cross, deny; aliases kept for compatibility)
+- [x] Pre-commit hook via `.githooks/` (fmt + clippy + commit-msg conventional check; dependency-free — `git config core.hooksPath .githooks`)
+- [x] `release-plz` wired (`.github/workflows/release-plz.yml`; needs `CARGO_REGISTRY_TOKEN` secret on first publish)
+- [x] Add `.github/ISSUE_TEMPLATE/` (bug report, feature request) and `PULL_REQUEST_TEMPLATE.md`; referenced from `CONTRIBUTING.md`
+- [x] Obsolete — those items (IoSlice, redirects, pooling) are now implemented
 
 ## Adoption: examples & templates (from adoption/usability review)
 
 - [ ] Embedded HTTP/WS example once a bare-metal `embedded-hal-async` I/O adapter exists — pairs the "HTTP+WS in 30 lines" story with actual embedded proof
-- [ ] "Migrating from tokio" guide/example — side-by-side tokio vs. tpt-async code, since the API deliberately avoids `async-trait` and requires explicit `Spawn`
+- [x] `docs/MIGRATING_FROM_TOKIO.md` — side-by-side mapping for entry points, time, I/O traits, and the deliberate differences
 - [ ] Extend `templates/tpt-app` cargo-generate template with desktop/embedded/wasm variant prompts, matching the three `examples/*` profiles
 - [ ] Live wasm playground/demo (built on `examples/wasm`) for browser-based try-before-install once `v0.1.0` is published
-- [ ] Replace README's HTTP+WS snippet (currently stub comments) with a real runnable end-to-end client+server example
+- [x] Runnable end-to-end example: `examples/desktop/src/bin/http-ws.rs` (HTTP client↔server + WS echo over in-memory pipes), linked from the README

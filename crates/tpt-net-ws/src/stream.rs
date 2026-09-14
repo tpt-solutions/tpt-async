@@ -163,6 +163,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         let expected = handshake::accept_key(key_b64.as_bytes());
 
         let mut conn = HttpConnection::new(io);
+        #[allow(unused_mut)]
         let mut request = handshake::render_client_request(path, host, &key_b64);
         #[cfg(feature = "permessage-deflate")]
         {
@@ -192,6 +193,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
             return Err(WsError::Handshake("Sec-WebSocket-Accept mismatch"));
         }
 
+        #[allow(unused_mut)]
         let mut ws = Self::from_conn(conn, Role::Client);
         #[cfg(feature = "permessage-deflate")]
         if head
@@ -238,13 +240,12 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
 
         #[cfg(feature = "permessage-deflate")]
         let (rsv1, payload) = if self.deflate && matches!(opcode, Opcode::Text | Opcode::Binary) {
-            eprintln!("DEBUG send: compressing {} bytes", payload.len());
-            let c = crate::deflate::compress(&payload);
-            eprintln!("DEBUG send: compressed to {} bytes", c.len());
-            (true, c)
+            (true, crate::deflate::compress(&payload))
         } else {
             (false, payload)
         };
+        #[cfg(not(feature = "permessage-deflate"))]
+        let (rsv1, payload) = (false, payload);
 
         let mut out = Vec::new();
         frame::encode(
@@ -294,14 +295,9 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
 
             // Per-message deflate: the first data frame of a compressed
             // message carries RSV1.
+            #[cfg(feature = "permessage-deflate")]
             let mut decoded = decoded;
-            eprintln!(
-                "DEBUG recv: fin={} rsv1={} opcode={:?} len={}",
-                decoded.fin,
-                decoded.rsv1,
-                decoded.opcode,
-                decoded.payload.len()
-            );
+            #[cfg(feature = "permessage-deflate")]
             if decoded.rsv1 {
                 if !self.deflate {
                     return Err(WsError::Protocol(
@@ -312,6 +308,12 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
                     decoded.payload =
                         crate::deflate::decompress(&decoded.payload, frame::MAX_PAYLOAD)?;
                 }
+            }
+            #[cfg(not(feature = "permessage-deflate"))]
+            if decoded.rsv1 {
+                return Err(WsError::Protocol(
+                    "RSV1 set but permessage-deflate support is not compiled in",
+                ));
             }
 
             match decoded.opcode {

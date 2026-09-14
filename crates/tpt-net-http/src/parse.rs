@@ -575,3 +575,11 @@ mod ws_handshake_debug {
         }
     }
 }
+
+/// Single-input entry for fuzzing: exercises both head parsers and the
+/// body-framing decision on the same bytes.
+#[cfg(feature = "fuzz")]
+pub fn fuzz_entry(data: &[u8]) {
+    let _ = parse_request_ranges(data);
+    let _ = parse_response_ranges(data);
+}

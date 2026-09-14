@@ -34,3 +34,7 @@ getrandom       = { version = "0.2", features = ["js"] }
 tokio = { version = "1", features = ["full"] }
 tpt-async-io = { workspace = true, features = ["tokio"] }
 rcgen = { workspace = true }
+
+[[example]]
+name = "autobahn-echo-client"
+required-features = []

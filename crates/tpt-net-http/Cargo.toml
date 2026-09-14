@@ -20,6 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 http2 = ["dep:h2", "dep:http", "dep:bytes", "dep:tokio"]
+fuzz = []
 
 [dependencies]
 tpt-async-core   = { workspace = true }

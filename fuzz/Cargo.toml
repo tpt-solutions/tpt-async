@@ -1,0 +1,36 @@
+[package]
+name        = "tpt-async-fuzz"
+description = "cargo-fuzz targets for tpt-async (run with `cargo +nightly fuzz run <target>`)"
+version     = "0.0.0"
+edition     = "2021"
+publish     = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys   = "0.4"
+tpt-async-timer = { path = "../crates/tpt-async-timer" }
+tpt-net-http    = { path = "../crates/tpt-net-http", features = ["fuzz"] }
+tpt-net-ws      = { path = "../crates/tpt-net-ws" }
+
+[[bin]]
+name = "http_head_parser"
+path = "fuzz_targets/http_head_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "timer_wheel_tick"
+path = "fuzz_targets/timer_wheel_tick.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ws_frame_decode"
+path = "fuzz_targets/ws_frame_decode.rs"
+test = false
+doc = false
+bench = false

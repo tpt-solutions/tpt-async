@@ -34,6 +34,7 @@
 
 extern crate alloc;
 
+#[cfg(feature = "permessage-deflate")]
 pub mod deflate;
 pub mod error;
 pub mod frame;

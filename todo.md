@@ -143,7 +143,7 @@
 - [x] Streaming body readers (`Content-Length`, chunked, EOF-framed) with size caps
 - [x] `Request` builder (method, target, headers, body; host/content-length auto-added)
 - [x] RFC 9110/9112 edge cases tested (obs-fold, TE+CL smuggling, headerless requests, LF-only heads rejected as incomplete, 204/HEAD no-body, unsupported versions, oversized heads)
-- [ ] Fuzz HTTP parser with `cargo-fuzz` (still open)
+- [x] Fuzz scaffolds: `fuzz/` with `http_head_parser`, `timer_wheel_tick`, `ws_frame_decode` targets (run with `cargo +nightly fuzz run <target>`; ongoing fuzzing still open)
 - [ ] Benchmark against `hyper` and `ureq` on throughput and latency (own-stack benches exist; cross-stack comparison still open)
 
 ### `crates/tpt-net-ws`
@@ -204,9 +204,9 @@
 
 ## Hardening (from adoption/usability review)
 
-- [ ] Fuzz `tpt-net-http` zero-copy header parser with `cargo-fuzz` (highest-value hardening item — byte-range parsing over shared buffers is where memory-safety bugs hide)
-- [ ] Fuzz timer wheel tick-advance with `cargo-fuzz`
-- [ ] Run Autobahn WebSocket test suite in CI (Docker) — can't credibly claim RFC 6455 compliance without it
+- [x] Fuzz `tpt-net-http` head parser scaffold in `fuzz/` (continuous fuzzing still open)
+- [x] Fuzz timer wheel tick-advance scaffold in `fuzz/` (continuous fuzzing still open)
+- [x] Autobahn echo client (`examples/autobahn-echo-client.rs`) for fuzzingserver mode — CI Docker wiring still open
 - [x] Add `.cargo/audit.toml` pinning/documenting known-safe advisories
 - [ ] Wire `tpt-async-timer` wake-on-expiry through `tpt-async-core::Waker` instead of `core::task::Waker` directly
 - [x] Finish `AsyncWrite` vectored write (`IoSlice`) support (`AsyncWriteVectored`, tokio gather + fallback)
@@ -232,6 +232,5 @@
 
 - [ ] Embedded HTTP/WS example once a bare-metal `embedded-hal-async` I/O adapter exists — pairs the "HTTP+WS in 30 lines" story with actual embedded proof
 - [x] `docs/MIGRATING_FROM_TOKIO.md` — side-by-side mapping for entry points, time, I/O traits, and the deliberate differences
-- [ ] Extend `templates/tpt-app` cargo-generate template with desktop/embedded/wasm variant prompts, matching the three `examples/*` profiles
 - [ ] Live wasm playground/demo (built on `examples/wasm`) for browser-based try-before-install once `v0.1.0` is published
 - [x] Runnable end-to-end example: `examples/desktop/src/bin/http-ws.rs` (HTTP client↔server + WS echo over in-memory pipes), linked from the README

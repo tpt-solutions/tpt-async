@@ -198,3 +198,40 @@
   8. `tpt-net-ws`
   9. `tpt-async` (facade — last)
 - [ ] Tag `v0.1.0` and create GitHub release with changelog excerpt
+
+---
+
+## Hardening (from adoption/usability review)
+
+- [ ] Fuzz `tpt-net-http` zero-copy header parser with `cargo-fuzz` (highest-value hardening item — byte-range parsing over shared buffers is where memory-safety bugs hide)
+- [ ] Fuzz timer wheel tick-advance with `cargo-fuzz`
+- [ ] Run Autobahn WebSocket test suite in CI (Docker) — can't credibly claim RFC 6455 compliance without it
+- [ ] Add `.cargo/audit.toml` pinning/documenting known-safe advisories
+- [ ] Wire `tpt-async-timer` wake-on-expiry through `tpt-async-core::Waker` instead of `core::task::Waker` directly
+- [ ] Finish `AsyncWrite` vectored write (`IoSlice`) support
+- [ ] Add HTTP connection pooling (bounded, configurable)
+- [ ] Add HTTP redirect following (max-hops configurable)
+
+## Innovative additions (from adoption/usability review)
+
+- [ ] `tpt-async-test` crate — deterministic fake clock (manually-advanced, built on the existing timer wheel) + fake I/O pair for testing timeouts/retries without wall-clock sleeps
+- [ ] `Spawn`/I/O adapter for `embassy` — makes the I/O/HTTP/WS stack usable inside embassy embedded projects, distinct audience from the current timer-only embedded example
+- [ ] HTTP client retry/backoff combinator built on `Timeout` — showcases the timer crate
+- [ ] `tracing`/`defmt` integration behind a feature flag
+- [ ] CI job tracking binary size / dep count per crate (`cargo bloat` / `twiggy` for wasm) and publishing it as a README badge — makes the "2 MB RAM, no 150-crate tree" claims verifiable
+
+## Usability / automation (from adoption/usability review)
+
+- [ ] Replace `.cargo/config.toml` check aliases with an `cargo xtask` (e.g. `cargo xtask ci`) so contributors can reproduce the full CI matrix locally in one command
+- [ ] Add a pre-commit hook (`cargo-husky` or similar) running `fmt --check` + `clippy`
+- [ ] Set up `cargo release` or `release-plz` for lock-step versioning/publish across all 9 crates instead of manual per-crate `cargo publish --dry-run`
+- [ ] Add `.github/ISSUE_TEMPLATE/` (bug report, feature request) and `PULL_REQUEST_TEMPLATE.md`; reference them from `CONTRIBUTING.md`
+- [ ] Label well-scoped open `todo.md` items (e.g. `IoSlice` support, redirect following) as `good first issue`
+
+## Adoption: examples & templates (from adoption/usability review)
+
+- [ ] Embedded HTTP/WS example once a bare-metal `embedded-hal-async` I/O adapter exists — pairs the "HTTP+WS in 30 lines" story with actual embedded proof
+- [ ] "Migrating from tokio" guide/example — side-by-side tokio vs. tpt-async code, since the API deliberately avoids `async-trait` and requires explicit `Spawn`
+- [ ] Extend `templates/tpt-app` cargo-generate template with desktop/embedded/wasm variant prompts, matching the three `examples/*` profiles
+- [ ] Live wasm playground/demo (built on `examples/wasm`) for browser-based try-before-install once `v0.1.0` is published
+- [ ] Replace README's HTTP+WS snippet (currently stub comments) with a real runnable end-to-end client+server example

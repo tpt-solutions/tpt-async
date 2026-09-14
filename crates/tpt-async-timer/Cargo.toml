@@ -37,3 +37,7 @@ fugit-timer = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+
+[[bench]]
+name = "wheel"
+harness = false

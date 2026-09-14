@@ -37,5 +37,13 @@ tokio            = { version = "1", features = ["rt", "net", "sync", "macros"], 
 tokio     = { version = "1", features = ["full"] }
 h2        = { version = "0.4", features = ["stream"] }
 tpt-async-io = { workspace = true, features = ["tokio"] }
+hyper        = { version = "1", features = ["http1", "client", "server"] }
+http-body-util = "0.1"
+hyper-util   = { version = "0.1", features = ["tokio"] }
+bytes        = "1"
 rcgen     = { workspace = true }
 criterion = { workspace = true }
+
+[[bench]]
+name = "http"
+harness = false

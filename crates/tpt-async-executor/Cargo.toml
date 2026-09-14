@@ -27,3 +27,7 @@ tpt-async-core = { workspace = true, features = ["alloc"] }
 [dev-dependencies]
 criterion = { workspace = true }
 tokio     = { version = "1", features = ["rt", "macros"] }
+
+[[bench]]
+name = "executor"
+harness = false

@@ -38,3 +38,6 @@ criterion = { workspace = true }
 async-std = { version = "1", features = ["attributes"] }
 futures-util = { version = "0.3", features = ["io"] }
 
+[[bench]]
+name = "read_buf"
+harness = false

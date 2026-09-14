@@ -139,7 +139,7 @@
   - [x] Connection pooling: bounded per-host `Pool` + `Connector` trait; `HttpClient::request` returns owned responses
   - [x] Redirect following (max-hops, relative/absolute Location resolution)
 - [x] HTTP/1.1 server: `serve_connection` keep-alive loop with RPITIT `Handler` trait (Router still open)
-- [ ] HTTP/2 client and server (behind `http2` feature flag, using the `h2` crate) — still open
+- [x] HTTP/2 client and server behind the `http2` feature (`h2` crate): `serve_h2` with `Http2Handler` (per-stream tokio tasks), `Http2Connection::connect`/`request` client, owned `H2Request`/`OwnedH2Response`; duplex round-trip tests
 - [x] Streaming body readers (`Content-Length`, chunked, EOF-framed) with size caps
 - [x] `Request` builder (method, target, headers, body; host/content-length auto-added)
 - [x] RFC 9110/9112 edge cases tested (obs-fold, TE+CL smuggling, headerless requests, LF-only heads rejected as incomplete, 204/HEAD no-body, unsupported versions, oversized heads)
@@ -156,7 +156,7 @@
 - [x] `WebSocketStream` type wrapping `tpt-async-io` transport (fragmentation assembly, auto-pong, close handshake)
 - [x] Ping answered with Pong automatically (timer-driven keepalive scheduling still open)
 - [x] Max frame size limit (16 MiB, configurable constant)
-- [ ] Per-message deflate extension behind `permessage-deflate` feature flag (still open; approach: flate2 raw-deflate + RSV1, negotiate no-context-takeover first)
+- [x] Per-message deflate behind the `permessage-deflate` feature: RSV1 codec support, client offer / server accept (no-context-takeover), per-message compress/decompress with decompression-bomb cap; integration verified over duplex
 - [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
 - [ ] Autobahn test suite pass (run via Docker in CI — needs a testee binary + container plumbing)
 
@@ -217,7 +217,7 @@
 - [x] `tpt-async-test` crate — `TestDriver` (manually-advanced wheel) + `io_pair` fake I/O with waker-based wakeup; 6 tests
 - [ ] `Spawn`/I/O adapter for `embassy` — I/O side DONE (`EmbeddedIo` over `embedded-io-async`); the Spawn side needs embassy-executor review: our `Spawn::spawn` returns a `JoinHandle`, which embassy's fire-and-forget `Spawner::spawn` (SpawnToken) cannot provide — implement as a documented `spawn_fire_and_forget(spawner, fut)` helper instead of a trait impl
 - [x] HTTP-agnostic `retry` + `RetryPolicy` (exponential backoff, capped) in `tpt-async-timer` (std feature), built on the driver's `sleep`
-- [ ] `tracing`/`defmt` integration behind a feature flag (approach: `defmt-03` feature adding `defmt::Format` impls to error types in core/io/tls/http/ws; `tracing` feature adding optional spans in executor/net crates) — still open
+- [ ] `tracing`/`defmt` integration behind a feature flag — defmt tried and REVERTED: any `defmt::write!`/Format use references `_defmt_acquire`-family linker symbols that only resolve against an embedded defmt logger, so host `--all-features` test builds fail to link (CI gate). Feasible path: keep defmt impls in a separate `tpt-async-defmt` crate, or support per-target feature resolution. `tracing` (std) remains open and unaffected
 - [x] CI job tracking dep count + release/wasm artifact sizes into the job summary (`.github/workflows/size.yml`); README badge still open
 
 ## Usability / automation (from adoption/usability review)

@@ -22,6 +22,9 @@ pub enum HttpError {
     /// (e.g. two different `Content-Length` values — request smuggling
     /// vector, always rejected).
     ConflictingHeaders(&'static str),
+    /// An HTTP/2 protocol error from the `h2` crate (feature `http2`).
+    #[cfg(feature = "http2")]
+    H2(h2::Error),
 }
 
 impl fmt::Display for HttpError {
@@ -34,6 +37,8 @@ impl fmt::Display for HttpError {
             HttpError::ConflictingHeaders(what) => {
                 write!(f, "conflicting headers: {what}")
             }
+            #[cfg(feature = "http2")]
+            HttpError::H2(e) => write!(f, "HTTP/2 error: {e}"),
         }
     }
 }
@@ -56,5 +61,12 @@ impl From<IoError> for HttpError {
 impl From<tpt_async_timer::timeout::TimedOut> for HttpError {
     fn from(_: tpt_async_timer::timeout::TimedOut) -> Self {
         HttpError::TimedOut
+    }
+}
+
+#[cfg(feature = "http2")]
+impl From<h2::Error> for HttpError {
+    fn from(e: h2::Error) -> Self {
+        HttpError::H2(e)
     }
 }

@@ -49,6 +49,8 @@ pub enum Message {
 pub struct WebSocketStream<IO> {
     conn: HttpConnection<IO>,
     role: Role,
+    /// permessage-deflate negotiated (feature `permessage-deflate`).
+    deflate: bool,
     /// Bytes read from the transport but not yet consumed by the codec.
     frame_buf: Vec<u8>,
     close_sent: bool,
@@ -60,10 +62,16 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         Self {
             conn,
             role,
+            deflate: false,
             frame_buf: Vec::new(),
             close_sent: false,
             close_received: false,
         }
+    }
+
+    /// Whether `permessage-deflate` was negotiated for this stream.
+    pub fn deflate_negotiated(&self) -> bool {
+        self.deflate
     }
 
     /// Complete the *server-side* opening handshake on an established
@@ -111,14 +119,39 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         }
 
         let accept = handshake::validate_and_accept(key)?;
+
+        // permessage-deflate negotiation (requires the crate feature on both
+        // sides to actually compress; otherwise the offer is declined and
+        // messages stay uncompressed).
+        #[cfg(feature = "permessage-deflate")]
+        let deflate_offer = headers.get(b"sec-websocket-extensions");
+        #[cfg(feature = "permessage-deflate")]
+        let deflate_negotiated = crate::deflate::server_accept(deflate_offer).is_some();
+        #[cfg(feature = "permessage-deflate")]
+        let accept_ext = crate::deflate::server_accept(deflate_offer);
+        #[cfg(not(feature = "permessage-deflate"))]
+        let deflate_negotiated = false;
+
+        let head = {
+            #[cfg(feature = "permessage-deflate")]
+            {
+                handshake::render_accept_response_with_ext(&accept, accept_ext.as_deref())
+            }
+            #[cfg(not(feature = "permessage-deflate"))]
+            {
+                handshake::render_accept_response(&accept)
+            }
+        };
+
         conn.write_message(
-            core::str::from_utf8(&handshake::render_accept_response(&accept))
-                .expect("accept response is ASCII"),
+            core::str::from_utf8(&head).expect("accept response is ASCII"),
             &[],
         )
         .await?;
 
-        Ok(Self::from_conn(conn, Role::Server))
+        let mut ws = Self::from_conn(conn, Role::Server);
+        ws.deflate = deflate_negotiated;
+        Ok(ws)
     }
 
     /// Complete the *client-side* opening handshake: send the upgrade
@@ -130,7 +163,14 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         let expected = handshake::accept_key(key_b64.as_bytes());
 
         let mut conn = HttpConnection::new(io);
-        let request = handshake::render_client_request(path, host, &key_b64);
+        let mut request = handshake::render_client_request(path, host, &key_b64);
+        #[cfg(feature = "permessage-deflate")]
+        {
+            request.truncate(request.len() - 2); // drop final CRLF
+            request.extend_from_slice(b"sec-websocket-extensions: ");
+            request.extend_from_slice(crate::deflate::client_offer().as_bytes());
+            request.extend_from_slice(b"\r\n\r\n");
+        }
         conn.write_message(
             core::str::from_utf8(&request).expect("client request is ASCII"),
             &[],
@@ -152,7 +192,22 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
             return Err(WsError::Handshake("Sec-WebSocket-Accept mismatch"));
         }
 
-        Ok(Self::from_conn(conn, Role::Client))
+        let mut ws = Self::from_conn(conn, Role::Client);
+        #[cfg(feature = "permessage-deflate")]
+        if head
+            .headers()
+            .get(b"sec-websocket-extensions")
+            .map(|v| v.to_vec())
+            .map(|v| {
+                v.windows(crate::deflate::EXTENSION_NAME.len())
+                    .any(|w| w.eq_ignore_ascii_case(crate::deflate::EXTENSION_NAME.as_bytes()))
+            })
+            .unwrap_or(false)
+        {
+            ws.deflate = true;
+        }
+
+        Ok(ws)
     }
 
     /// Send a message.  Text payloads must be UTF-8; control payloads are
@@ -181,10 +236,21 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
             }
         };
 
+        #[cfg(feature = "permessage-deflate")]
+        let (rsv1, payload) = if self.deflate && matches!(opcode, Opcode::Text | Opcode::Binary) {
+            eprintln!("DEBUG send: compressing {} bytes", payload.len());
+            let c = crate::deflate::compress(&payload);
+            eprintln!("DEBUG send: compressed to {} bytes", c.len());
+            (true, c)
+        } else {
+            (false, payload)
+        };
+
         let mut out = Vec::new();
         frame::encode(
             &Frame {
                 fin,
+                rsv1,
                 opcode,
                 payload,
             },
@@ -225,6 +291,28 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
                 }
                 self.frame_buf.extend_from_slice(&chunk[..n]);
             };
+
+            // Per-message deflate: the first data frame of a compressed
+            // message carries RSV1.
+            let mut decoded = decoded;
+            eprintln!(
+                "DEBUG recv: fin={} rsv1={} opcode={:?} len={}",
+                decoded.fin,
+                decoded.rsv1,
+                decoded.opcode,
+                decoded.payload.len()
+            );
+            if decoded.rsv1 {
+                if !self.deflate {
+                    return Err(WsError::Protocol(
+                        "RSV1 set but permessage-deflate was not negotiated",
+                    ));
+                }
+                if matches!(decoded.opcode, Opcode::Text | Opcode::Binary) {
+                    decoded.payload =
+                        crate::deflate::decompress(&decoded.payload, frame::MAX_PAYLOAD)?;
+                }
+            }
 
             match decoded.opcode {
                 Opcode::Ping => {

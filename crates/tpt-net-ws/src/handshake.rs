@@ -70,13 +70,26 @@ pub fn validate_and_accept(key_header: &[u8]) -> Result<String, crate::error::Ws
 
 /// Build the raw bytes of a `101 Switching Protocols` response.
 pub fn render_accept_response(accept: &str) -> Vec<u8> {
+    render_accept_response_with_ext(accept, None)
+}
+
+/// Build the raw bytes of a `101 Switching Protocols` response with an
+/// optional `Sec-WebSocket-Extensions` header line (used by
+/// `permessage-deflate` negotiation).
+pub fn render_accept_response_with_ext(accept: &str, extensions: Option<&str>) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(b"HTTP/1.1 101 Switching Protocols\r\n");
     out.extend_from_slice(b"upgrade: websocket\r\n");
     out.extend_from_slice(b"connection: Upgrade\r\n");
     out.extend_from_slice(b"sec-websocket-accept: ");
     out.extend_from_slice(accept.as_bytes());
-    out.extend_from_slice(b"\r\n\r\n");
+    out.extend_from_slice(b"\r\n");
+    if let Some(ext) = extensions {
+        out.extend_from_slice(b"sec-websocket-extensions: ");
+        out.extend_from_slice(ext.as_bytes());
+        out.extend_from_slice(b"\r\n");
+    }
+    out.extend_from_slice(b"\r\n");
     out
 }
 

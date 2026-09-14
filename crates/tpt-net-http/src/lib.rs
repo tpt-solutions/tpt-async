@@ -44,6 +44,9 @@ pub mod body;
 pub mod client;
 pub mod connection;
 pub mod error;
+#[cfg(feature = "http2")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http2")))]
+pub mod http2;
 pub mod parse;
 pub mod prelude;
 pub mod server;

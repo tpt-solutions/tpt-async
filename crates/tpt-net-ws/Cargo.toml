@@ -18,8 +18,12 @@ workspace   = "../.."
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[features]
+permessage-deflate = ["dep:flate2"]
+
 [dependencies]
 tpt-async-core  = { workspace = true }
+flate2          = { version = "1", optional = true }
 tpt-async-io    = { workspace = true }
 tpt-async-timer = { workspace = true }
 tpt-net-http    = { workspace = true }

@@ -18,15 +18,23 @@ workspace   = "../.."
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[features]
+http2 = ["dep:h2", "dep:http", "dep:bytes", "dep:tokio"]
+
 [dependencies]
 tpt-async-core   = { workspace = true }
 tpt-async-io     = { workspace = true }
 tpt-async-timer  = { workspace = true }
 tpt-net-tls      = { workspace = true }
 rustls           = { workspace = true, features = ["ring", "std"] }
+h2               = { version = "0.4", optional = true }
+http             = { version = "1", optional = true }
+bytes            = { version = "1", optional = true }
+tokio            = { version = "1", features = ["rt", "net", "sync", "macros"], optional = true }
 
 [dev-dependencies]
 tokio     = { version = "1", features = ["full"] }
+h2        = { version = "0.4", features = ["stream"] }
 tpt-async-io = { workspace = true, features = ["tokio"] }
 rcgen     = { workspace = true }
 criterion = { workspace = true }

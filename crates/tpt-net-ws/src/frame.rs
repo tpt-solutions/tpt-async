@@ -62,6 +62,9 @@ impl Opcode {
 pub struct Frame {
     /// FIN bit: this frame is the last of its message.
     pub fin: bool,
+    /// RSV1 bit: set on the first data frame of a message compressed with
+    /// the negotiated `permessage-deflate` extension.
+    pub rsv1: bool,
     /// Frame opcode.
     pub opcode: Opcode,
     /// Unmasked payload.
@@ -72,10 +75,10 @@ pub struct Frame {
 /// server frames pass `None`).
 pub fn encode(frame: &Frame, mask: Option<[u8; 4]>, out: &mut Vec<u8>) {
     let len = frame.payload.len();
-    let fin_opcode = (frame.fin as u8) << 7 | frame.opcode.to_u8();
+    let bits = (u8::from(frame.fin) << 7) | (u8::from(frame.rsv1) << 6) | frame.opcode.to_u8();
     let mask_bit = if mask.is_some() { 0x80 } else { 0x00 };
 
-    out.push(fin_opcode);
+    out.push(bits);
     if len < 126 {
         out.push(mask_bit | len as u8);
     } else if len <= u16::MAX as usize {
@@ -117,11 +120,10 @@ pub fn decode(buf: &[u8], role: Role) -> Result<Option<(Frame, usize)>, WsError>
         return Ok(None);
     }
     let fin = buf[0] & 0x80 != 0;
-    let rsv = buf[0] & 0x70;
-    if rsv != 0 {
-        return Err(WsError::Protocol(
-            "RSV bits set without negotiated extension",
-        ));
+    let rsv1 = buf[0] & 0x40 != 0;
+    // RSV2/RSV3 are only settable by extensions we never negotiate.
+    if buf[0] & 0x30 != 0 {
+        return Err(WsError::Protocol("RSV2/RSV3 bits set"));
     }
     let opcode = Opcode::from_u8(buf[0] & 0x0F)?;
 
@@ -199,6 +201,7 @@ pub fn decode(buf: &[u8], role: Role) -> Result<Option<(Frame, usize)>, WsError>
     Ok(Some((
         Frame {
             fin,
+            rsv1,
             opcode,
             payload,
         },
@@ -245,6 +248,7 @@ mod tests {
     fn sample(op: Opcode, len: usize) -> (Frame, Vec<u8>) {
         let frame = Frame {
             fin: true,
+            rsv1: false,
             opcode: op,
             payload: vec![0xAB; len],
         };
@@ -260,6 +264,7 @@ mod tests {
         for mask in [Some(mask_key()), None] {
             let frame = Frame {
                 fin: true,
+                rsv1: false,
                 opcode: Opcode::Text,
                 payload: payload.clone(),
             };
@@ -303,6 +308,7 @@ mod tests {
     fn unmasked_client_frame_is_rejected() {
         let frame = Frame {
             fin: true,
+            rsv1: false,
             opcode: Opcode::Text,
             payload: b"hi".to_vec(),
         };
@@ -318,6 +324,7 @@ mod tests {
     fn oversized_control_frame_is_rejected() {
         let frame = Frame {
             fin: true,
+            rsv1: false,
             opcode: Opcode::Ping,
             payload: vec![0; 200],
         };

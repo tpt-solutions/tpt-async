@@ -379,8 +379,6 @@ mod tests {
     fn fake_pair_shutdown_gives_peer_eof() {
         let (mut a, mut b) = io_pair();
         a.shutdown();
-        let waker = noop_waker();
-        let mut cx = Context::from_waker(&waker);
         let mut buf = [0u8; 4];
         let mut rb = ReadBuf::new(&mut buf);
         std::future::poll_fn(|cx| Pin::new(&mut b).poll_read(cx, &mut rb))

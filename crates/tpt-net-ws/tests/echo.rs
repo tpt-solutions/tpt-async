@@ -115,6 +115,7 @@ async fn fragmented_message_is_assembled() {
     encode(
         &Frame {
             fin: false,
+            rsv1: false,
             opcode: Opcode::Text,
             payload: b"frag".to_vec(),
         },
@@ -124,6 +125,7 @@ async fn fragmented_message_is_assembled() {
     encode(
         &Frame {
             fin: true,
+            rsv1: false,
             opcode: Opcode::Continuation,
             payload: b"ment".to_vec(),
         },
@@ -133,6 +135,7 @@ async fn fragmented_message_is_assembled() {
     encode(
         &Frame {
             fin: true,
+            rsv1: false,
             opcode: Opcode::Text,
             payload: b"next".to_vec(),
         },

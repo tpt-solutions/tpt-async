@@ -34,6 +34,7 @@
 
 extern crate alloc;
 
+pub mod deflate;
 pub mod error;
 pub mod frame;
 pub mod handshake;

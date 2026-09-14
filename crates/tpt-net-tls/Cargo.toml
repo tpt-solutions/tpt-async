@@ -27,7 +27,7 @@ tls12        = []  # opt-in TLS 1.2 support
 [dependencies]
 tpt-async-core = { workspace = true }
 tpt-async-io   = { workspace = true }
-tpt-async-timer = { workspace = true }
+tpt-async-timer = { workspace = true, features = ["std"] }
 rustls              = { workspace = true, features = ["ring", "std"] }
 rustls-pemfile      = { workspace = true }
 sha2                = "0.10"

@@ -1,55 +1,40 @@
-# tpt-async
+# tpt-async (facade)
 
-> **The runtime-agnostic async I/O facade.**
+The single-dependency entry point for the tpt-async runtime-agnostic async
+stack. Re-exports `tpt_async::prelude` from all sub-crates.
 
-Add to your `Cargo.toml`:
+## Quick start
 
 ```toml
 [dependencies]
-tpt-async    = "0.1"
-tpt-net-http = "0.1"   # optional: HTTP client/server
-tpt-net-tls  = "0.1"   # optional: TLS
+tpt-async = { version = "0.1", features = ["macros", "io"] }
 ```
 
-Then in your code:
-
-```rust
+```rust,no_run
+use std::time::Duration;
 use tpt_async::prelude::*;
-use tpt_net_http::prelude::*;
 
 #[tpt_async::main]
-async fn main() {
-    let client = HttpClient::builder()
-        .tls(tpt_net_tls::rustls_config())
-        .build();
-
-    let resp = client
-        .get("https://api.tpt.solutions/health")
-        .timeout(Duration::from_millis(500))
-        .send()
-        .await
-        .unwrap();
-
-    println!("Status: {}", resp.status());
+async fn main() -> Result<(), tpt_async::Timeout> {
+    sleep(Duration::from_millis(10)).await;
+    let answer = timeout(Duration::from_secs(1), async { 42 }).await?;
+    println!("answer: {answer}");
+    Ok(())
 }
 ```
 
 ## Feature flags
 
-| Flag       | Default | Description |
-|------------|---------|-------------|
-| `std`      | yes     | Enables std clock, std error impls |
-| `alloc`    | yes     | Enables `JoinHandle`, `Completer` |
-| `executor` | yes     | Includes `LocalExecutor` and `block_on` |
-| `timer`    | yes     | Includes `Sleep`, `Interval`, `Timeout` |
-| `macros`   | no      | Re-exports `#[tpt_async::main]` proc-macro |
+| Flag         | Default | What it enables |
+|--------------|---------|-----------------|
+| `std`        | yes     | std features in sub-crates |
+| `alloc`      | yes     | `JoinHandle`, `Completer` |
+| `executor`   | yes     | `LocalExecutor`, `block_on` |
+| `timer`      | yes     | `Sleep`, `Interval`, `Timeout`, wheel, `sleep()`/`timeout()`/`interval()` |
+| `macros`     | no      | `#[tpt_async::main]` (implies `executor`) |
+| `io`         | no      | `AsyncRead`/`AsyncWrite` + ext traits + adapters |
+| `tls`        | no      | `tpt-net-tls` re-exports (implies `io`) |
+| `spawn-tokio`| no      | `impl Spawn` for tokio runtime handles |
+| `spawn-smol` | no      | `spawn_on_smol()` helper |
 
-For embedded / no_std use, disable default features:
-
-```toml
-tpt-async = { version = "0.1", default-features = false, features = ["alloc"] }
-```
-
-## License
-
-MIT OR Apache-2.0 — © 2026 TPT Solutions
+See the [workspace README](../../README.md) for the full story.

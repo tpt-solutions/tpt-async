@@ -24,11 +24,16 @@ default = ["std"]
 # futures are allocation-free.
 alloc   = []
 std     = ["alloc"]   # enables the background driver thread + sleep()/timeout()
+# `embedded-time` is unmaintained; fugit (used by RTIC) is the supported
+# embedded clock-compat surface.
+fugit   = ["dep:fugit", "dep:fugit-timer"]
 
 [dependencies]
 # The wheel uses a spin mutex so it stays no_std-safe while still shareable
 # across threads.
 spin = { workspace = true }
+fugit = { version = "0.4", default-features = false, optional = true }
+fugit-timer = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

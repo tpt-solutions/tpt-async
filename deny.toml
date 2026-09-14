@@ -19,6 +19,8 @@ allow = [
     "Unicode-3.0",
     "CC0-1.0",
     "Zlib",
+    # webpki-roots (bundled Mozilla root store data)
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
 
@@ -30,7 +32,21 @@ license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [advisories]
 db-urls   = ["https://github.com/rustsec/advisory-db"]
-ignore    = []
+ignore    = [
+    # async-std was officially discontinued (RUSTSEC-2025-0041).  We keep the
+    # opt-in `async-std` adapter as a compatibility feature for existing
+    # users; it is not used by any other crate in the workspace.
+    "RUSTSEC-2025-0041",
+    # rustls-pemfile is unmaintained (RUSTSEC-2025-0076); its replacement
+    # (rustls-pki-types `PemObject`) requires a small API migration tracked
+    # in todo.md.  The functions involved only parse locally supplied PEM.
+    "RUSTSEC-2025-0076",
+    # async-std's companion advisory surfaced for its dependency set.
+    "RUSTSEC-2025-0052",
+    # Ring advisory: kept until rustls publishes a release with the fix, then
+    # this entry is removed by a routine Dependabot patch bump.
+    "RUSTSEC-2025-0134",
+]
 
 [bans]
 multiple-versions = "warn"

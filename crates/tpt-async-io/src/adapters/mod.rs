@@ -17,3 +17,6 @@ pub mod tokio_compat;
 
 #[cfg(feature = "async-std")]
 pub mod async_std_compat;
+
+#[cfg(feature = "embedded-io")]
+pub mod embedded_compat;

@@ -50,3 +50,8 @@ smol               = { version = "2", optional = true }
 name = "entrypoint"
 harness = false
 required-features = ["macros"]
+
+[[test]]
+name = "entrypoint_custom"
+harness = false
+required-features = ["macros"]

@@ -19,5 +19,6 @@ extern crate alloc;
 pub mod error;
 pub mod prelude;
 pub mod spawn;
+pub mod state_machine;
 pub mod task;
 pub mod waker;

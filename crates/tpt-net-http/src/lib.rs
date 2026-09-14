@@ -48,7 +48,7 @@ pub mod parse;
 pub mod prelude;
 pub mod server;
 
-pub use client::{ClientConnection, HttpClient, Request, Response};
+pub use client::{ClientConnection, Connector, HttpClient, OwnedResponse, Pool, Request, Response};
 pub use error::HttpError;
 pub use parse::{HeaderBlock, RequestHead, ResponseHead, Version};
 pub use server::{headers, serve_connection, Handler, ResponseData, ServerRequest};

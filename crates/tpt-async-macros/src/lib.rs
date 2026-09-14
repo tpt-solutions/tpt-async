@@ -10,7 +10,8 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn, ReturnType};
+use syn::parse::Parser as _;
+use syn::{parse_macro_input, ItemFn, LitStr, Path, ReturnType};
 
 /// Marks an `async fn main()` as the entry point, driving it with the
 /// `tpt-async` executor.
@@ -42,13 +43,37 @@ use syn::{parse_macro_input, ItemFn, ReturnType};
 ///
 /// - If applied to a function that is not named `main`.
 /// - If applied to a non-`async` function.
+/// - If unknown arguments are passed, or `executor = "…"` is not a string
+///   literal containing a valid path (or `"default"`).
 #[proc_macro_attribute]
 pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse `#[tpt_async::main(executor = "…")]` (the only supported arg).
+    let mut executor: Option<Path> = None;
+    let parser = syn::meta::parser(|meta| {
+        if meta.path.is_ident("executor") {
+            let value = meta.value()?;
+            let lit: LitStr = value.parse()?;
+            if lit.value() == "default" {
+                executor = None;
+            } else {
+                match lit.parse::<Path>() {
+                    Ok(path) => executor = Some(path),
+                    Err(e) => {
+                        return Err(syn::Error::new(
+                            e.span(),
+                            "executor must be \"default\" or a valid path string",
+                        ));
+                    }
+                }
+            }
+            Ok(())
+        } else {
+            Err(meta.error("unsupported argument; expected `executor = \"…\"`"))
+        }
+    });
     let args = proc_macro2::TokenStream::from(attr);
-    if !args.is_empty() {
-        return syn::Error::new_spanned(args, "#[tpt_async::main] takes no arguments")
-            .to_compile_error()
-            .into();
+    if let Err(e) = parser.parse2(args) {
+        return e.to_compile_error().into();
     }
 
     let input = parse_macro_input!(item as ItemFn);
@@ -78,7 +103,25 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Preserve a non-unit return type so `Result` exits report failures via
     // `Termination`; a unit return is discarded as before.
     let returns_value = !matches!(input.sig.output, ReturnType::Default);
-    let output = if returns_value {
+    let output = if let Some(runner) = executor {
+        // Third-party runtime: call the given `fn(Future) -> Output`.
+        let ret = &input.sig.output;
+        if returns_value {
+            quote! {
+                #(#attrs)*
+                #vis fn main() #ret {
+                    #runner(async #body)
+                }
+            }
+        } else {
+            quote! {
+                #(#attrs)*
+                #vis fn main() {
+                    #runner(async #body);
+                }
+            }
+        }
+    } else if returns_value {
         let ret = &input.sig.output;
         quote! {
             #(#attrs)*

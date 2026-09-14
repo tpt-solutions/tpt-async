@@ -142,3 +142,99 @@ impl<W: AsyncWrite + Unpin + ?Sized> Future for Shutdown<'_, W> {
         Pin::new(&mut *self.get_mut().writer).poll_shutdown(cx)
     }
 }
+
+// ── Vectored writes (std) ─────────────────────────────────────────────────────
+
+/// Vectored-write extension over [`AsyncWrite`].
+///
+/// `std`-only because scatter/gather slices ([`std::io::IoSlice`]) are an
+/// OS concept.  Implementations with real gather support override
+/// [`poll_write_vectored`](AsyncWriteVectored::poll_write_vectored)
+/// (e.g. tokio sockets via [`TokioCompat`](crate::TokioCompat)); everything
+/// else falls back to writing the first non-empty buffer, so protocol
+/// stacks can always emit head + body through one call.
+#[cfg(feature = "std")]
+pub trait AsyncWriteVectored: AsyncWrite {
+    /// Write data from multiple buffers, returning the total bytes written.
+    ///
+    /// May write fewer bytes than the sum of the buffers; the caller
+    /// advances by the returned count.
+    fn poll_write_vectored(
+        &mut self,
+        cx: &mut Context<'_>,
+        bufs: &mut [std::io::IoSlice<'_>],
+    ) -> Poll<Result<usize, IoError>>;
+
+    /// Returns `true` when [`poll_write_vectored`](AsyncWriteVectored::poll_write_vectored)
+    /// gathers buffers natively (otherwise it is the single-buffer
+    /// fallback).
+    fn is_write_vectored(&self) -> bool;
+}
+
+/// Shared fallback: write the first non-empty buffer.
+#[cfg(feature = "std")]
+pub fn write_vectored_fallback<W: AsyncWrite + Unpin + ?Sized>(
+    w: &mut W,
+    cx: &mut Context<'_>,
+    bufs: &mut [std::io::IoSlice<'_>],
+) -> Poll<Result<usize, IoError>> {
+    for slice in bufs.iter() {
+        if !slice.is_empty() {
+            return Pin::new(w).poll_write(cx, slice);
+        }
+    }
+    Poll::Ready(Ok(0))
+}
+
+#[cfg(feature = "std")]
+impl<W: std::io::Write + Unpin> AsyncWriteVectored for crate::adapters::std_compat::StdWriter<W> {
+    fn poll_write_vectored(
+        &mut self,
+        cx: &mut Context<'_>,
+        bufs: &mut [std::io::IoSlice<'_>],
+    ) -> Poll<Result<usize, IoError>> {
+        write_vectored_fallback(self, cx, bufs)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        false
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl<T: tokio::io::AsyncWrite + Unpin> AsyncWriteVectored
+    for crate::adapters::tokio_compat::TokioWriter<T>
+{
+    fn poll_write_vectored(
+        &mut self,
+        cx: &mut Context<'_>,
+        bufs: &mut [std::io::IoSlice<'_>],
+    ) -> Poll<Result<usize, IoError>> {
+        let inner = Pin::new(&mut self.0);
+        tokio::io::AsyncWrite::poll_write_vectored(inner, cx, bufs)
+            .map(|r| r.map_err(IoError::from))
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        true
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl<T: tokio::io::AsyncWrite + Unpin> AsyncWriteVectored
+    for crate::adapters::tokio_compat::TokioCompat<T>
+{
+    fn poll_write_vectored(
+        &mut self,
+        cx: &mut Context<'_>,
+        bufs: &mut [std::io::IoSlice<'_>],
+    ) -> Poll<Result<usize, IoError>> {
+        let inner = Pin::new(&mut self.0);
+        tokio::io::AsyncWrite::poll_write_vectored(inner, cx, bufs)
+            .map(|r| r.map_err(IoError::from))
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        true
+    }
+}

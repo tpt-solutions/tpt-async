@@ -29,9 +29,9 @@
 - [x] Set `#![no_std]` with `extern crate alloc` behind `alloc` feature flag
 - [x] Define `Spawn` trait — implemented by user's runtime or default executor
 - [x] Define `JoinHandle<T>` + `Completer` types (alloc)
-- [ ] Define standalone `Task` type (alloc-optional) — not yet implemented
+- [x] Define standalone `Task` type (alloc): cancel-on-drop handle with `detach()`; no-alloc callers use raw traits (true alloc-free spawn still open)
 - [x] Implement custom `RawWaker` / `Waker` construction utilities
-- [ ] Write zero-cost state machine derive helper (or macro-based)
+- [x] Write zero-cost state machine helper: `state_machine!` declarative macro (plain enums + const `match` transition fn, fully no_std)
 - [x] Define `LocalSpawn` trait for single-threaded contexts
 - [x] Add `prelude` module re-exporting core traits
 - [x] Unit tests (no_std-compatible)
@@ -43,9 +43,9 @@
 - [x] `cargo new --lib crates/tpt-async-macros`
 - [x] Set `[lib] proc-macro = true` in `Cargo.toml`
 - [x] Implement `#[tpt_async::main]` that wraps `async fn main` with the configured executor entry point
-- [ ] Support `executor = "default"` attribute arg (extensible for third-party runtimes)
+- [x] Support `executor = "default"` / `executor = "my_runtime::run"` attribute arg (custom runner test in `tpt-async/tests/entrypoint_custom.rs`)
 - [ ] Emit compile-error on `no_std` targets (macro is std-only entry-point sugar; currently fails only via unresolved paths)
-- [ ] Write macro expansion tests with `trybuild` or `macrotest`
+- [x] Write macro expansion tests with `trybuild` (`tests/ui.rs`: non-async, wrong name, unknown arg, bad executor path)
 
 ### `crates/tpt-async-executor`
 > Optional single-threaded cooperative executor
@@ -58,8 +58,8 @@
 - [x] Add `block_on(future)` (currently a `LocalExecutor` method, not a free function)
 - [x] No `unsafe` except where strictly required for Waker raw pointer handling; document all `unsafe` blocks
 - [ ] Feature flag `work-stealing` — reserved for Phase 2+ (empty stub feature removed to avoid false advertising)
-- [ ] Unit tests: nested spawns (done), waker re-use, task cancellation (pending)
-- [ ] Benchmark vs. `tokio::task::LocalSet` with criterion
+- [x] Unit tests: nested spawns, waker re-use, duplicate-wake coalescing, cross-thread wake, task cancellation on executor drop
+- [x] Benchmark vs. `tokio::task::LocalSet` with criterion (`benches/localset.rs`)
 
 ### `crates/tpt-async-timer`
 > Heapless hierarchical timer wheel
@@ -72,8 +72,8 @@
 - [x] Implement `Interval` future (periodic ticks)
 - [x] Implement `Timeout<F>` combinator wrapping any `Future`
 - [ ] Integrate with `tpt-async-core` `Waker` for wake-on-expiry (currently uses `core::task::Waker` directly)
-- [ ] Provide `std` feature that hooks into system monotonic clock (`StdClock` exists; not yet wired into `TimerWheel::tick`)
-- [ ] Provide `embedded-time` / `fugit` compatibility behind feature flags
+- [x] Provide `std` feature that hooks into system monotonic clock (the std driver thread reads `StdClock` and calls `wheel.advance_to`)
+- [x] Provide `fugit` compatibility behind the `fugit` feature (`FugitTimer` wrapper over `fugit_timer::Timer`; `embedded-time` skipped — unmaintained)
 - [ ] no_std tests using `defmt-test` or `embedded-test`
 - [ ] Fuzz tick-advance with `cargo-fuzz`
 
@@ -85,8 +85,8 @@
 - [x] Re-export `tpt-async-executor` behind `executor` feature (default on std)
 - [x] Re-export `tpt-async-macros` so `#[tpt_async::main]` works from this crate
 - [x] Feature flags: `alloc`, `std`, `executor`, `timer` — composable
-- [ ] Verify `use tpt_async::prelude::*` compiles the spec's `main` example
-- [ ] Top-level crate `README.md` with quick-start example
+- [x] Verify `use tpt_async::prelude::*` compiles the spec's `main` example (adapted to the real API in `tpt-async/tests/entrypoint*.rs`)
+- [x] Top-level crate `README.md` with quick-start example (`crates/tpt-async/README.md`)
 
 ---
 
@@ -102,10 +102,11 @@
 - [x] Implement `StdCompat` adapter (synchronous `poll_*` calls — non-blocking fds only)
 - [x] Implement `TokioCompat` adapter behind `tokio` feature flag (explicit `TokioReader`/`TokioWriter` wrappers)
 - [x] Implement `AsyncStdCompat` adapter behind `async-std` feature flag
-- [ ] Bare-metal adapter: register-mapped I/O via `embedded-hal-async` behind feature flag
+- [x] Embedded adapter behind the `embedded-io` feature: `EmbeddedIo` bridges `embedded-io-async` Read/Write (embassy ecosystem) to our traits (needs `alloc` for RPITIT boxing; no-alloc targets implement our traits directly)
 - [x] Zero-copy `ReadBuf` type (non-allocating; tracks the filled sub-slice, not per-byte init state)
-- [ ] Integration tests for each adapter pairing (std↔tokio, etc.)
+- [x] Integration tests for adapter pairings (tokio duplex round-trip, std cursor, async-std writer)
 - [x] `AsyncReadExt`/`AsyncWriteExt` helpers (`read_exact`, `read_to_end`, `write_all`, `flush`, `shutdown`)
+- [x] Vectored writes: std-only `AsyncWriteVectored` trait with native tokio gather support and a single-buffer fallback
 
 ### `crates/tpt-net-tls`
 > rustls 0.23 wrapper; no OpenSSL, no ring fallback
@@ -118,10 +119,10 @@
   - [x] TLS 1.3 only by default; TLS 1.2 opt-in behind feature flag
   - [x] System root certs via `rustls-native-certs` behind `native-certs` feature
   - [x] Bundled Mozilla roots via `webpki-roots` behind `webpki-roots` feature (default)
-- [ ] Certificate pinning helper
+- [x] Certificate pinning helper: `PinnedCertVerifier` (SHA-256 pins, optional webpki fallback) + `pinned_connector`
 - [x] No `unsafe` beyond rustls internals
 - [x] Integration test: full TLS handshake against local `rcgen`-generated cert
-- [ ] Dependency audit: `cargo deny` check that no GPL or viral licenses enter
+- [x] Dependency audit: `cargo deny check` green — licenses allow-list extended for webpki-roots (CDLA-Permissive-2.0), rustls bumped past RUSTSEC vuln, async-std/rustls-pemfile/ring advisories ignored with justifications
 
 ---
 
@@ -135,15 +136,15 @@
 - [x] HTTP/1.1 client: `ClientConnection` + `Request` builder (`HttpClient` holds optional TLS)
   - [x] `.tls` integration with `tpt-net-tls` (`HttpClient::with_tls` + `connect_tls`)
   - [x] `.timeout(Duration)` integration with `tpt-async-timer` (TLS connect/accept timeouts; request timeouts via `tpt_async::timeout`)
-  - [ ] Connection pooling (bounded, configurable)
-  - [ ] Redirect following (max-hops configurable)
+  - [x] Connection pooling: bounded per-host `Pool` + `Connector` trait; `HttpClient::request` returns owned responses
+  - [x] Redirect following (max-hops, relative/absolute Location resolution)
 - [x] HTTP/1.1 server: `serve_connection` keep-alive loop with RPITIT `Handler` trait (Router still open)
-- [ ] HTTP/2 client and server (behind `http2` feature flag, using `h2` crate or hand-rolled hpack)
+- [ ] HTTP/2 client and server (behind `http2` feature flag, using the `h2` crate) — still open
 - [x] Streaming body readers (`Content-Length`, chunked, EOF-framed) with size caps
 - [x] `Request` builder (method, target, headers, body; host/content-length auto-added)
-- [ ] Spec compliance: RFC 7230/7231 (1.1) and RFC 7540 (2) edge cases tested
+- [x] RFC 9110/9112 edge cases tested (obs-fold, TE+CL smuggling, headerless requests, LF-only heads rejected as incomplete, 204/HEAD no-body, unsupported versions, oversized heads)
 - [ ] Fuzz HTTP parser with `cargo-fuzz` (still open)
-- [ ] Benchmark against `hyper` and `ureq` on throughput and latency
+- [ ] Benchmark against `hyper` and `ureq` on throughput and latency (own-stack benches exist; cross-stack comparison still open)
 
 ### `crates/tpt-net-ws`
 > Pure-Rust WebSocket framing, masking, ping/pong (client + server)
@@ -155,9 +156,9 @@
 - [x] `WebSocketStream` type wrapping `tpt-async-io` transport (fragmentation assembly, auto-pong, close handshake)
 - [x] Ping answered with Pong automatically (timer-driven keepalive scheduling still open)
 - [x] Max frame size limit (16 MiB, configurable constant)
-- [ ] Per-message deflate extension behind `permessage-deflate` feature flag
-- [x] Integration tests: echo server (duplex), control frames, close handshake; fragmentation assembly covered in recv (dedicated fragment test still open)
-- [ ] Autobahn test suite pass (run via Docker in CI)
+- [ ] Per-message deflate extension behind `permessage-deflate` feature flag (still open; approach: flate2 raw-deflate + RSV1, negotiate no-context-takeover first)
+- [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
+- [ ] Autobahn test suite pass (run via Docker in CI — needs a testee binary + container plumbing)
 
 ---
 
@@ -175,7 +176,7 @@
 - [x] `cargo deny check` — license + advisory audit in CI
 - [x] `cargo test --workspace` with `nextest` for faster output
 - [x] Dependabot or Renovate for automated dependency PRs (`.github/dependabot.yml`, weekly, rustls patch-only)
-- [ ] `.cargo/audit.toml` pinning known-safe advisories
+- [x] `.cargo/audit.toml` pinning known-safe advisories (created; primary advisory gate remains `cargo deny`)
 
 ---
 
@@ -206,11 +207,10 @@
 - [ ] Fuzz `tpt-net-http` zero-copy header parser with `cargo-fuzz` (highest-value hardening item — byte-range parsing over shared buffers is where memory-safety bugs hide)
 - [ ] Fuzz timer wheel tick-advance with `cargo-fuzz`
 - [ ] Run Autobahn WebSocket test suite in CI (Docker) — can't credibly claim RFC 6455 compliance without it
-- [ ] Add `.cargo/audit.toml` pinning/documenting known-safe advisories
+- [x] Add `.cargo/audit.toml` pinning/documenting known-safe advisories
 - [ ] Wire `tpt-async-timer` wake-on-expiry through `tpt-async-core::Waker` instead of `core::task::Waker` directly
-- [ ] Finish `AsyncWrite` vectored write (`IoSlice`) support
-- [ ] Add HTTP connection pooling (bounded, configurable)
-- [ ] Add HTTP redirect following (max-hops configurable)
+- [x] Finish `AsyncWrite` vectored write (`IoSlice`) support (`AsyncWriteVectored`, tokio gather + fallback)
+- [x] Add HTTP connection pooling (bounded, configurable) — `Pool` + `Connector` + `HttpClient::request` with redirects
 
 ## Innovative additions (from adoption/usability review)
 

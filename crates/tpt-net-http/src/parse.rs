@@ -250,8 +250,14 @@ fn find_head_end(buf: &[u8]) -> Result<Option<usize>, HttpError> {
 
 /// The range of the first CRLF-terminated line of `head`.
 fn first_line(head: &[u8]) -> Option<Range<usize>> {
-    let end = head.windows(2).position(|w| w == b"\r\n")?;
-    Some(0..end)
+    // With no CRLF inside `head`, the whole head *is* the first line —
+    // the headerless-request shape (`GET / HTTP/1.1\r\n\r\n`), where the
+    // line terminator doubles as the head delimiter.
+    match head.windows(2).position(|w| w == b"\r\n") {
+        Some(end) => Some(0..end),
+        None if !head.is_empty() => Some(0..head.len()),
+        None => None,
+    }
 }
 
 /// Turn every line after `skip` lines of the head into a `(name, value)`
@@ -378,4 +384,194 @@ fn memchr_find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         return None;
     }
     (0..=haystack.len() - needle.len()).find(|&i| &haystack[i..i + needle.len()] == needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::HttpError;
+
+    #[test]
+    fn parses_request_head_with_headers() {
+        let buf =
+            b"POST /submit?x=1 HTTP/1.1\r\nhost: example.com\r\ncontent-length: 5\r\n\r\nhello";
+        let parsed = parse_request_ranges(buf).unwrap().unwrap();
+        assert_eq!(parsed.consumed, buf.len() - 5);
+        let arc = alloc::sync::Arc::new(buf.to_vec());
+        let head = RequestHead::from_ranges(arc, &parsed);
+        assert_eq!(head.method(), b"POST");
+        assert_eq!(head.target(), b"/submit?x=1");
+        assert_eq!(head.version(), Version::Http11);
+        assert_eq!(head.headers().get(b"Host"), Some(&b"example.com"[..]));
+        assert_eq!(head.headers().get(b"CONTENT-LENGTH"), Some(&b"5"[..]));
+    }
+
+    #[test]
+    fn parses_status_line_and_reason() {
+        let buf = b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n";
+        let parsed = parse_response_ranges(buf).unwrap().unwrap();
+        let arc = alloc::sync::Arc::new(buf.to_vec());
+        let head = ResponseHead::from_ranges(arc, &parsed);
+        assert_eq!(head.status(), 404);
+        assert_eq!(head.reason(), b"Not Found");
+    }
+
+    #[test]
+    fn partial_head_needs_more_bytes() {
+        let buf = b"GET / HTTP/1.1\r\nhost: a";
+        assert!(parse_request_ranges(buf).unwrap().is_none());
+    }
+
+    #[test]
+    fn rejects_obs_fold() {
+        let buf = b"GET / HTTP/1.1\r\nx-a: 1\r\n  folded\r\n\r\n";
+        assert!(matches!(
+            parse_request_ranges(buf),
+            Err(HttpError::Parse("obsolete line folding in header block"))
+        ));
+    }
+
+    #[test]
+    fn rejects_header_without_colon() {
+        let buf = b"GET / HTTP/1.1\r\nbroken-header\r\n\r\n";
+        assert!(matches!(
+            parse_request_ranges(buf),
+            Err(HttpError::Parse("header line missing colon"))
+        ));
+    }
+
+    #[test]
+    fn rejects_empty_method_and_bad_token() {
+        assert!(parse_request_ranges(b" / HTTP/1.1\r\n\r\n").is_err());
+        assert!(parse_request_ranges(b"GE(T / HTTP/1.1\r\n\r\n").is_err());
+    }
+
+    #[test]
+    fn rejects_unsupported_version() {
+        assert!(parse_request_ranges(b"GET / HTTP/2.0\r\n\r\n").is_err());
+        assert!(parse_request_ranges(b"GET / HTTP/1.9\r\n\r\n").is_err());
+    }
+
+    #[test]
+    fn lf_only_head_is_incomplete_not_an_error() {
+        // LF-only line endings: no CRLFCRLF delimiter ever appears.
+        let buf = b"GET / HTTP/1.1\nhost: a\n\n";
+        assert!(parse_request_ranges(buf).unwrap().is_none());
+    }
+
+    #[test]
+    fn oversized_head_rejected() {
+        let big = alloc::vec![b'a'; MAX_HEAD + 1];
+        assert!(matches!(
+            parse_request_ranges(&big),
+            Err(HttpError::Parse("message head exceeds 64 KiB"))
+        ));
+    }
+
+    // ── body framing (smuggling hygiene) ─────────────────────────────────────
+
+    use crate::body::{request_body_kind, response_body_kind, BodyKind};
+
+    fn block_of(pairs: &[(&str, &str)]) -> HeaderBlock {
+        // Build a HeaderBlock by parsing a synthetic head.
+        let mut head = alloc::string::String::from("POST / HTTP/1.1\r\n");
+        for (n, v) in pairs {
+            head.push_str(n);
+            head.push_str(": ");
+            head.push_str(v);
+            head.push_str("\r\n");
+        }
+        head.push_str("\r\n");
+        let parsed = parse_request_ranges(head.as_bytes())
+            .unwrap()
+            .expect("parses");
+        RequestHead::from_ranges(alloc::sync::Arc::new(head.into_bytes()), &parsed)
+            .headers
+            .clone()
+    }
+
+    #[test]
+    fn content_length_framing() {
+        let headers = block_of(&[("content-length", "12")]);
+        assert_eq!(
+            request_body_kind(&headers).unwrap(),
+            BodyKind::ContentLength(12)
+        );
+    }
+
+    #[test]
+    fn chunked_request_framing() {
+        let headers = block_of(&[("transfer-encoding", "chunked")]);
+        assert_eq!(request_body_kind(&headers).unwrap(), BodyKind::Chunked);
+    }
+
+    #[test]
+    fn te_plus_cl_is_rejected() {
+        let headers = block_of(&[("transfer-encoding", "chunked"), ("content-length", "5")]);
+        assert!(matches!(
+            request_body_kind(&headers),
+            Err(HttpError::ConflictingHeaders(_))
+        ));
+    }
+
+    #[test]
+    fn unsupported_te_is_rejected() {
+        let headers = block_of(&[("transfer-encoding", "gzip")]);
+        assert!(request_body_kind(&headers).is_err());
+    }
+
+    #[test]
+    fn response_without_length_is_eof_framed() {
+        let headers = block_of(&[]);
+        assert_eq!(
+            response_body_kind(&headers, 200, false).unwrap(),
+            BodyKind::UntilEof
+        );
+    }
+
+    #[test]
+    fn response_204_has_no_body() {
+        let headers = block_of(&[]);
+        assert_eq!(
+            response_body_kind(&headers, 204, false).unwrap(),
+            BodyKind::Empty
+        );
+        // 204 even WITH a content-length stays empty (no body by spec).
+        let headers = block_of(&[("content-length", "10")]);
+        assert_eq!(
+            response_body_kind(&headers, 204, false).unwrap(),
+            BodyKind::Empty
+        );
+    }
+
+    #[test]
+    fn head_request_has_no_body() {
+        let headers = block_of(&[("content-length", "10")]);
+        assert_eq!(
+            response_body_kind(&headers, 200, true).unwrap(),
+            BodyKind::Empty
+        );
+    }
+}
+
+#[cfg(test)]
+mod ws_handshake_debug {
+    use super::*;
+
+    #[test]
+    fn parses_ws_handshake_head() {
+        let buf = b"GET /ws HTTP/1.1\r\nhost: t\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nsec-websocket-version: 13\r\n\r\n";
+        match parse_request_ranges(buf) {
+            Ok(Some(ranges)) => {
+                let arc = alloc::sync::Arc::new(buf.to_vec());
+                let head = RequestHead::from_ranges(arc, &ranges);
+                assert_eq!(
+                    head.headers().get(b"sec-websocket-key"),
+                    Some(&b"dGhlIHNhbXBsZSBub25jZQ=="[..])
+                );
+            }
+            Ok(None) => panic!("partial: needed more bytes"),
+            Err(e) => panic!("parse error: {e:?}"),
+        }
+    }
 }

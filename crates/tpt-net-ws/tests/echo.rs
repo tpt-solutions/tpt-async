@@ -77,3 +77,88 @@ async fn handshake_echo_and_close() {
 
     server.await.expect("server task");
 }
+
+#[tokio::test]
+async fn fragmented_message_is_assembled() {
+    use tokio::io::AsyncWriteExt as _;
+
+    use tpt_net_ws::frame::{encode, Frame, Opcode};
+
+    let (mut client_io, server_io) = tokio::io::duplex(64 * 1024);
+
+    let server = tokio::spawn(async move {
+        WebSocketStream::accept(TokioCompat::new(server_io))
+            .await
+            .expect("handshake")
+    });
+
+    // Handshake head built from explicit CRLF pieces (no literals that
+    // editors/converters may normalize).
+    let mut handshake = b"GET /ws HTTP/1.1".to_vec();
+    handshake.extend_from_slice(b"\r\n");
+    let headers: &[&[u8]] = &[
+        b"host: t",
+        b"upgrade: websocket",
+        b"connection: Upgrade",
+        b"sec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==",
+        b"sec-websocket-version: 13",
+    ];
+    for header in headers {
+        handshake.extend_from_slice(header);
+        handshake.extend_from_slice(b"\r\n");
+    }
+    handshake.extend_from_slice(b"\r\n");
+
+    // Feed a handcrafted fragmented text message: "frag" (no FIN) +
+    // "ment" (FIN, continuation), then an unrelated "next" message.
+    let mut raw = Vec::new();
+    encode(
+        &Frame {
+            fin: false,
+            opcode: Opcode::Text,
+            payload: b"frag".to_vec(),
+        },
+        Some([1, 2, 3, 4]),
+        &mut raw,
+    );
+    encode(
+        &Frame {
+            fin: true,
+            opcode: Opcode::Continuation,
+            payload: b"ment".to_vec(),
+        },
+        Some([5, 6, 7, 8]),
+        &mut raw,
+    );
+    encode(
+        &Frame {
+            fin: true,
+            opcode: Opcode::Text,
+            payload: b"next".to_vec(),
+        },
+        Some([9, 10, 11, 12]),
+        &mut raw,
+    );
+    use tokio::io::AsyncWriteExt as _;
+    client_io
+        .write_all(&handshake)
+        .await
+        .expect("handshake write");
+    client_io.write_all(&raw).await.expect("frame write");
+
+    let mut server = server.await.expect("server task");
+
+    let first = server.recv().await.expect("recv 1").expect("message 1");
+    assert_eq!(
+        first,
+        Message::Text("fragment".into()),
+        "fragments must assemble"
+    );
+    let second = server.recv().await.expect("recv 2").expect("message 2");
+    assert_eq!(
+        second,
+        Message::Text("next".into()),
+        "messages must stay separated"
+    );
+    drop(client_io); // keep-alive while the server wrote its 101 + reads
+}

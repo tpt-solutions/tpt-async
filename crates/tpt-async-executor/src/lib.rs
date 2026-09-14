@@ -44,7 +44,7 @@ use std::task::{Context, Poll, Wake, Waker};
 
 use tpt_async_core::error::SpawnError;
 use tpt_async_core::spawn::{LocalSpawn, Spawn};
-use tpt_async_core::task::{Completer, JoinHandle};
+use tpt_async_core::task::{Completer, JoinHandle, Task};
 
 // ---------------------------------------------------------------------------
 // Thread-safe scheduling core (shared with wakers)
@@ -367,11 +367,42 @@ impl LocalExecutor {
         }));
         handle
     }
+
+    /// Spawn `future` and return a [`Task`] — cancel-on-drop semantics.
+    fn spawn_task_erased<F>(&self, future: F) -> Task<F::Output>
+    where
+        F: Future + 'static,
+        F::Output: 'static,
+    {
+        Task::from_join_handle(self.spawn_erased(future))
+    }
 }
 
 impl Default for LocalExecutor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl LocalExecutor {
+    /// Spawn a `Send` future, returning a [`Task`] that cancels on drop.
+    ///
+    /// See [`Task`] for the cancellation model.
+    pub fn spawn_task<F>(&self, future: F) -> Task<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.spawn_task_erased(future)
+    }
+
+    /// Spawn a `!Send` future, returning a [`Task`] that cancels on drop.
+    pub fn spawn_task_local<F>(&self, future: F) -> Task<F::Output>
+    where
+        F: Future + 'static,
+        F::Output: 'static,
+    {
+        self.spawn_task_erased(future)
     }
 }
 
@@ -405,6 +436,7 @@ impl LocalSpawn for LocalExecutor {
 pub mod prelude {
     pub use crate::LocalExecutor;
     pub use tpt_async_core::spawn::{LocalSpawn, Spawn};
+    pub use tpt_async_core::task::Task;
 }
 
 // ---------------------------------------------------------------------------

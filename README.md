@@ -77,23 +77,31 @@ use tpt_net_http::prelude::*;
 use tpt_net_ws::prelude::*;
 use tpt_async_io::TokioCompat;
 
-// ── Serve HTTP on any transport ──────────────────────────────────────────────
-struct Hello;
-impl Handler<TokioCompat<tokio::io::DuplexStream>> for Hello {
-    async fn handle(&mut self, _req: &mut ServerRequest<'_, TokioCompat<tokio::io::DuplexStream>>) -> ResponseData {
-        ResponseData::ok("hello".as_bytes().to_vec())
+// ── Serve HTTP: handler trait, zero-copy request access ─────────────────────
+struct Health;
+impl Handler<TokioCompat<tokio::io::DuplexStream>> for Health {
+    async fn handle(
+        &mut self,
+        req: &mut ServerRequest<'_, TokioCompat<tokio::io::DuplexStream>>,
+    ) -> ResponseData {
+        assert_eq!(req.method(), b"GET");
+        ResponseData::ok(b"ok".as_slice())
     }
 }
 
-// ── Ask for a WebSocket upgrade on the server side ───────────────────────────
+// ── Accept a WebSocket upgrade on the server side ───────────────────────────
 // let ws = WebSocketStream::accept(io).await?;
 // ws.send(Message::Text("hello".into())).await?;
 
-// ── Client side ──────────────────────────────────────────────────────────────
-// let mut conn = ClientConnection::new(io);
-// let mut resp = conn.send(&Request::new("GET", "/health"), "example.com").await?;
-// assert_eq!(resp.status(), 200);
+// ── Client side: pooled request with redirects ──────────────────────────────
+// let pool = Pool::new(TcpConnector::default(), 8);
+// let resp = HttpClient::new().request(&pool, &Request::new("GET", "/health"), 3).await?;
+// assert_eq!(resp.status, 200);
 ```
+
+Everything above runs over **any** transport: tokio sockets via `TokioCompat`,
+TLS via `tpt-net-tls`, or in-memory pipes (the integration tests do exactly
+that — client against server, no sockets).
 
 ## Status & Roadmap
 

@@ -5,6 +5,7 @@
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::future::Future;
 
 use tpt_async_io::{AsyncRead, AsyncWrite};
 
@@ -94,6 +95,11 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> ClientConnection<IO> {
         Self {
             conn: HttpConnection::new(io),
         }
+    }
+
+    /// Unwrap the underlying transport (after a completed exchange).
+    pub fn into_inner(self) -> IO {
+        self.conn.into_inner()
     }
 
     /// Send one request and read the response head.
@@ -190,5 +196,217 @@ impl HttpClient {
             )))
         })?;
         Ok(ClientConnection::new(stream))
+    }
+}
+
+// ── Pooling + redirects ───────────────────────────────────────────────────────
+
+/// Establishes transports for a [`Pool`].
+///
+/// Implement for your transport (tokio TCP + TLS, embassy, in-memory test
+/// doubles…).  `authority` is the `host[:port]` string the request targets.
+pub trait Connector {
+    /// The transport this connector produces.
+    type Conn: AsyncRead + AsyncWrite + Unpin;
+
+    /// Connect to `authority` ("host" or "host:port").
+    fn connect(
+        &self,
+        authority: &str,
+    ) -> impl Future<Output = Result<Self::Conn, HttpError>> + Send;
+}
+
+/// A bounded, per-host connection pool.
+///
+/// Connections come back to the pool when a request/response exchange
+/// finished with the body fully drained and neither side signalled
+/// `Connection: close`.  Idle connections beyond `max_idle_per_host` are
+/// dropped (the transport close happens on drop).
+pub struct Pool<C: Connector> {
+    connector: C,
+    idle: std::sync::Mutex<std::collections::HashMap<String, Vec<C::Conn>>>,
+    max_idle_per_host: usize,
+}
+
+impl<C: Connector> Pool<C> {
+    /// Create a pool using `connector`, keeping at most `max_idle_per_host`
+    /// idle connections per host.
+    pub fn new(connector: C, max_idle_per_host: usize) -> Self {
+        Self {
+            connector,
+            idle: std::sync::Mutex::new(std::collections::HashMap::new()),
+            max_idle_per_host: max_idle_per_host.max(1),
+        }
+    }
+
+    fn take(&self, authority: &str) -> Option<C::Conn> {
+        let mut idle = self.idle.lock().expect("pool poisoned");
+        idle.get_mut(authority)?.pop()
+    }
+
+    fn put(&self, authority: &str, conn: C::Conn) {
+        let mut idle = self.idle.lock().expect("pool poisoned");
+        let slot = idle.entry(authority.to_string()).or_default();
+        if slot.len() < self.max_idle_per_host {
+            slot.push(conn);
+        }
+        // else: dropped → transport closed
+    }
+}
+
+/// An owned response for pooled/redirected requests: everything is cloned
+/// out of the zero-copy head so the connection can go back to the pool.
+#[derive(Debug, Clone)]
+pub struct OwnedResponse {
+    /// Status code.
+    pub status: u16,
+    /// Response headers (name, value), lowercased name on the wire.
+    pub headers: Vec<(String, String)>,
+    /// Fully-drained body bytes.
+    pub body: Vec<u8>,
+}
+
+impl HttpClient {
+    /// Send `request` through `pool` to `authority`, following up to
+    /// `max_redirects` 3xx responses whose `location` header points at a
+    /// new target (relative paths reuse the current authority).
+    ///
+    /// Returns [`OwnedResponse`]; the connection returns to the pool when
+    /// the exchange was keep-alive clean.
+    pub async fn request<C: Connector>(
+        &self,
+        pool: &Pool<C>,
+        request: &Request,
+        max_redirects: usize,
+    ) -> Result<OwnedResponse, HttpError> {
+        let mut authority = String::new();
+        let mut req = request.clone();
+        let mut hops = 0usize;
+
+        loop {
+            if authority.is_empty() {
+                authority = default_authority_for(&req)?;
+            }
+
+            let conn = match pool.take(&authority) {
+                Some(conn) => conn,
+                None => pool.connector.connect(&authority).await?,
+            };
+
+            let mut client = ClientConnection::new(conn);
+            let mut response = client.send(&req, host_of(&authority)).await?;
+            let status = response.status();
+
+            // Redirect?
+            if (300..400).contains(&status) && status != 304 {
+                if hops >= max_redirects {
+                    return Err(HttpError::Parse("too many redirects"));
+                }
+                let location = response
+                    .header(b"location")
+                    .map(|v| String::from_utf8_lossy(v).into_owned())
+                    .ok_or(HttpError::Parse("redirect without location"))?;
+                // Drain whatever body accompanies the redirect so the
+                // connection stays framed (best effort for pooled reuse).
+                let _ = response.body_bytes(1024 * 1024).await;
+                hops += 1;
+                let (new_authority, new_target) =
+                    resolve_redirect(&authority, &req.target, &location);
+                authority = new_authority;
+                req.target = new_target;
+                req.body.clear();
+                continue;
+            }
+
+            let body = response.body_bytes(MAX_POOLED_BODY).await?;
+            let keep_alive = keep_alive_from(response.headers());
+            let headers = response
+                .headers()
+                .iter()
+                .map(|(n, v)| {
+                    (
+                        String::from_utf8_lossy(n).into_owned(),
+                        String::from_utf8_lossy(v).into_owned(),
+                    )
+                })
+                .collect();
+
+            drop(response);
+
+            let conn = client.into_inner();
+            if keep_alive {
+                pool.put(&authority, conn);
+            }
+
+            return Ok(OwnedResponse {
+                status,
+                headers,
+                body,
+            });
+        }
+    }
+}
+
+/// Upper bound for pooled-request bodies (64 MiB).
+const MAX_POOLED_BODY: usize = 64 * 1024 * 1024;
+
+fn default_authority_for(request: &Request) -> Result<String, HttpError> {
+    Ok(request
+        .headers
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case("host"))
+        .map(|(_, v)| v.clone())
+        .unwrap_or_else(|| "localhost".to_string()))
+}
+
+fn host_of(authority: &str) -> &str {
+    authority.split(':').next().unwrap_or(authority)
+}
+
+fn keep_alive_from(headers: &crate::parse::HeaderBlock) -> bool {
+    match headers.get(b"connection") {
+        Some(v) => !v.eq_ignore_ascii_case(b"close"),
+        None => true, // HTTP/1.1 default
+    }
+}
+
+/// Resolve a `Location` header to (authority, target).
+fn resolve_redirect(
+    current_authority: &str,
+    current_target: &str,
+    location: &str,
+) -> (String, String) {
+    if let Some(rest) = location.strip_prefix("http://") {
+        let (auth, path) = split_authority_path(rest);
+        return (auth.to_string(), path.to_string());
+    }
+    if location.starts_with("https://") {
+        // TLS pooling needs a TLS-aware connector; treat as an authority the
+        // connector must understand (the Connector decides the scheme).
+        let rest = location.strip_prefix("https://").unwrap();
+        let (auth, path) = split_authority_path(rest);
+        return (
+            format!("{}:443", auth.split(':').next().unwrap_or(auth)),
+            path.to_string(),
+        );
+    }
+    if location.starts_with('/') {
+        return (current_authority.to_string(), location.to_string());
+    }
+    // Relative path: resolve against the current target's directory.
+    let base = current_target
+        .rsplit_once('/')
+        .map(|(d, _)| d)
+        .unwrap_or("");
+    (
+        current_authority.to_string(),
+        alloc::format!("{base}/{location}"),
+    )
+}
+
+fn split_authority_path(rest: &str) -> (&str, &str) {
+    match rest.find('/') {
+        Some(slash) => (&rest[..slash], &rest[slash..]),
+        None => (rest, "/"),
     }
 }

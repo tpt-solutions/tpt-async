@@ -59,6 +59,17 @@ impl IoError {
 }
 
 #[cfg(not(feature = "std"))]
+impl core::fmt::Display for IoError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.msg.is_empty() {
+            write!(f, "I/O error: {:?}", self.kind)
+        } else {
+            write!(f, "I/O error: {} ({:?})", self.msg, self.kind)
+        }
+    }
+}
+
+#[cfg(not(feature = "std"))]
 impl IoError {
     /// Creates an `IoError` without std.
     pub fn new(kind: IoErrorKind, msg: &'static str) -> Self {

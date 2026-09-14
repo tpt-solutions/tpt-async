@@ -12,6 +12,7 @@
 //! | `std`       | yes     | wraps `std::io::Error` in `IoError`, enables `std::error::Error` |
 //! | `tokio`     | no      | [`TokioReader`]/[`TokioWriter`] adapters for tokio types |
 //! | `async-std` | no      | [`AsyncStdReader`]/[`AsyncStdWriter`] adapters for async-std types |
+//! | `embedded-io` | no   | [`EmbeddedIo`] adapter for `embedded-io-async` streams (embassy) |
 //!
 //! Tokio and async-std types do **not** implement our traits via blanket
 //! impls; wrap them explicitly (`TokioReader::new(stream)`), which keeps
@@ -39,11 +40,16 @@ pub use buf::AsyncBufRead;
 pub use read::IoErrorKind;
 pub use read::{AsyncRead, AsyncReadExt, IoError};
 pub use read_buf::ReadBuf;
+#[cfg(feature = "std")]
+pub use write::AsyncWriteVectored;
 pub use write::{AsyncWrite, AsyncWriteExt};
 
 #[cfg(feature = "async-std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async-std")))]
 pub use adapters::async_std_compat::{AsyncStdReader, AsyncStdWriter};
+#[cfg(feature = "embedded-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "embedded-io")))]
+pub use adapters::embedded_compat::EmbeddedIo;
 #[cfg(feature = "std")]
 pub use adapters::std_compat::{StdReader, StdWriter};
 #[cfg(feature = "tokio")]

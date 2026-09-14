@@ -34,10 +34,12 @@ pub mod acceptor;
 pub mod config;
 pub mod connector;
 pub mod error;
+pub mod pinning;
 pub mod stream;
 
 pub use acceptor::TlsAcceptor;
 pub use config::{load_pem_certs, load_pem_key, rustls_config, server_config};
 pub use connector::TlsConnector;
 pub use error::TlsError;
+pub use pinning::{pin_for_cert, pinned_connector, PinnedCertVerifier};
 pub use stream::TlsStream;

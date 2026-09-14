@@ -9,4 +9,4 @@ pub use crate::spawn::{LocalSpawn, Spawn};
 pub use crate::waker::{noop_context, noop_waker, waker_fn};
 
 #[cfg(feature = "alloc")]
-pub use crate::task::{Completer, JoinHandle};
+pub use crate::task::{Completer, JoinHandle, Task};

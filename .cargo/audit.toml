@@ -1,0 +1,6 @@
+# cargo-audit configuration: advisories known to be safely applicable are
+# ignored here with a justification.  Keep this list minimal and reviewed.
+# (cargo-deny's [advisories] section is the primary gate; this file covers
+# `cargo audit` runs.)
+[advisories]
+ignore = []

@@ -1,0 +1,19 @@
+error: unsupported argument; expected `executor = "…"`
+ --> tests/ui/unknown_arg.rs:3:19
+  |
+3 | #[tpt_async::main(bogus = 1)]
+  |                   ^^^^^
+
+warning: unused import: `tpt_async::prelude::*`
+ --> tests/ui/unknown_arg.rs:1:5
+  |
+1 | use tpt_async::prelude::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/ui/unknown_arg.rs:4:19
+  |
+4 | async fn main() {}
+  |                   ^ consider adding a `main` function to `$DIR/tests/ui/unknown_arg.rs`

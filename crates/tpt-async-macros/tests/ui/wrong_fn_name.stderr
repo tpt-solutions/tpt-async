@@ -1,0 +1,13 @@
+error: #[tpt_async::main] can only be applied to `fn main`
+ --> tests/ui/wrong_fn_name.rs:4:10
+  |
+4 | async fn not_main() {
+  |          ^^^^^^^^
+
+warning: unused import: `tpt_async::prelude::*`
+ --> tests/ui/wrong_fn_name.rs:1:5
+  |
+1 | use tpt_async::prelude::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default

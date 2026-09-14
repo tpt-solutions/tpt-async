@@ -151,6 +151,78 @@ impl<T> Drop for Completer<T> {
     }
 }
 
+/// A spawned-task handle with **cancel-on-drop** semantics.
+///
+/// `Task<T>` behaves like [`JoinHandle<T>`] except that dropping it cancels
+/// the task instead of detaching it — the mirror image of tokio's
+/// `JoinHandle` (detach-on-drop) and the analogue of `smol::Task`.
+///
+/// Cancellation is *handle-level*: the handle resolves to
+/// [`Err(Cancelled)`](Cancelled) and executors built on this crate stop
+/// reporting results.  Dropping the underlying future remains the
+/// executor's decision.
+///
+/// Call [`detach`](Task::detach) to convert a `Task` back into a plain
+/// [`JoinHandle`] (fire-and-forget).
+pub struct Task<T> {
+    inner: JoinHandle<T>,
+}
+
+impl<T> Task<T> {
+    /// Wrap a [] into a cancel-on-drop [].
+    ///
+    /// Executors call this after spawning; not intended for end users
+    /// (use [] pairs or an executor spawn API instead).
+    pub fn from_join_handle(inner: JoinHandle<T>) -> Self {
+        Self { inner }
+    }
+
+    /// Detach: the task keeps running and its result is discarded.
+    pub fn detach(self) -> JoinHandle<T> {
+        // Take `inner` without running `Task`'s Drop (which would cancel) —
+        // exactly the detach contract.
+        let this = core::mem::ManuallyDrop::new(self);
+        // SAFETY: `inner` is moved out exactly once and the ManuallyDrop
+        // wrapper guarantees `Task::drop` never runs afterwards.
+        unsafe { core::ptr::read(&this.inner) }
+    }
+
+    /// Cancel the task early (also happens on drop).
+    pub fn cancel(&self) {
+        self.inner.cancel();
+    }
+
+    /// Returns `true` if the task has finished (or been cancelled).
+    pub fn is_finished(&self) -> bool {
+        self.inner.is_finished()
+    }
+}
+
+impl<T> Future for Task<T> {
+    type Output = Result<T, Cancelled>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // Task is a transparent wrapper; JoinHandle is Unpin.
+        Pin::new(&mut self.get_mut().inner).poll(cx)
+    }
+}
+
+impl<T> Drop for Task<T> {
+    fn drop(&mut self) {
+        if !self.inner.is_finished() {
+            self.inner.cancel();
+        }
+    }
+}
+
+impl<T> core::fmt::Debug for Task<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Task")
+            .field("finished", &self.is_finished())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +240,43 @@ mod tests {
         let (handle, completer) = Completer::<u32>::new();
         drop(completer);
         assert!(handle.is_finished());
+    }
+
+    #[test]
+    fn task_cancel_marks_finished() {
+        let (handle, _completer) = Completer::<u32>::new();
+        let task = Task::from_join_handle(handle);
+        assert!(!task.is_finished());
+        task.cancel();
+        assert!(task.is_finished());
+        // Completing after cancellation must not resurrect the task.
+        _completer.complete(7);
+        assert!(task.is_finished());
+    }
+
+    #[test]
+    fn task_detach_preserves_completion() {
+        let (handle, completer) = Completer::<u32>::new();
+        let task = Task::from_join_handle(handle);
+        let join = task.detach(); // detach must NOT cancel
+        completer.complete(7);
+        assert!(join.is_finished());
+    }
+
+    #[test]
+    fn task_poll_returns_cancelled_after_cancel() {
+        use core::pin::pin;
+        use core::task::{Context, Poll};
+
+        let (handle, _completer) = Completer::<u32>::new();
+        let mut task = pin!(Task::from_join_handle(handle));
+        let waker = crate::waker::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        assert!(task.as_mut().poll(&mut cx).is_pending());
+        task.as_mut().cancel();
+        assert!(matches!(
+            task.as_mut().poll(&mut cx),
+            Poll::Ready(Err(Cancelled))
+        ));
     }
 }

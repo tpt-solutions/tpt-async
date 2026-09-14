@@ -82,7 +82,7 @@ fn ensure_driver() {
 }
 
 fn driver_loop() {
-    let clock = StdClock::new();
+    let mut clock = StdClock::new();
     loop {
         // Catch the wheel up to real time; this wakes every due timer.
         WHEEL.advance_to(clock.now_ticks());

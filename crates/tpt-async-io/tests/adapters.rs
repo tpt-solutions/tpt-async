@@ -78,3 +78,20 @@ async fn std_adapter_roundtrip_with_cursor() {
     reader2.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"payload");
 }
+
+#[async_std::test]
+async fn async_std_writer_flushes_to_buffer() {
+    use tpt_async_io::AsyncStdWriter;
+
+    // Writer path: async-std BufWriter over a Vec (which implements the
+    // futures-io AsyncWrite that async-std blankets over) — write_all then
+    // flush must land every byte in the wrapped buffer.
+    let mut writer = AsyncStdWriter::new(async_std::io::BufWriter::new(Vec::new()));
+    writer
+        .write_all(b"async-std pairing")
+        .await
+        .expect("write_all");
+    writer.flush().await.expect("flush");
+    let written = writer.into_inner().into_inner().await.expect("into_inner");
+    assert_eq!(written, b"async-std pairing");
+}

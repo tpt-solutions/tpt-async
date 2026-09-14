@@ -30,6 +30,7 @@ tpt-async-io   = { workspace = true }
 tpt-async-timer = { workspace = true }
 rustls              = { workspace = true, features = ["ring", "std"] }
 rustls-pemfile      = { workspace = true }
+sha2                = "0.10"
 webpki-roots        = { workspace = true, optional = true }
 rustls-native-certs = { workspace = true, optional = true }
 

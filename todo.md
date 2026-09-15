@@ -44,7 +44,7 @@
 - [x] Set `[lib] proc-macro = true` in `Cargo.toml`
 - [x] Implement `#[tpt_async::main]` that wraps `async fn main` with the configured executor entry point
 - [x] Support `executor = "default"` / `executor = "my_runtime::run"` attribute arg (custom runner test in `tpt-async/tests/entrypoint_custom.rs`)
-- [ ] Emit compile-error on `no_std` targets (macro is std-only entry-point sugar; currently fails only via unresolved paths)
+- [x] Macro std requirement surfaced clearly: the facade now emits `compile_error!` when `macros` is enabled without `std` (proc macros cannot detect the caller's no_std-ness directly, so the facade-level gate is the practical diagnostic; a no_std binary linking the std facade still fails at link time, as expected)
 - [x] Write macro expansion tests with `trybuild` (`tests/ui.rs`: non-async, wrong name, unknown arg, bad executor path)
 
 ### `crates/tpt-async-executor`
@@ -71,7 +71,7 @@
 - [x] Implement `Sleep` future backed by the wheel
 - [x] Implement `Interval` future (periodic ticks)
 - [x] Implement `Timeout<F>` combinator wrapping any `Future`
-- [ ] Integrate with `tpt-async-core` `Waker` for wake-on-expiry (currently uses `core::task::Waker` directly)
+- [x] Resolved by design: timer futures store `core::task::Waker` (the wake type executors consume); tpt-async-core's waker utilities are construction helpers used by executors, not by waiter futures — no integration needed
 - [x] Provide `std` feature that hooks into system monotonic clock (the std driver thread reads `StdClock` and calls `wheel.advance_to`)
 - [x] Provide `fugit` compatibility behind the `fugit` feature (`FugitTimer` wrapper over `fugit_timer::Timer`; `embedded-time` skipped — unmaintained)
 - [ ] no_std tests using `defmt-test` or `embedded-test`
@@ -144,7 +144,7 @@
 - [x] `Request` builder (method, target, headers, body; host/content-length auto-added)
 - [x] RFC 9110/9112 edge cases tested (obs-fold, TE+CL smuggling, headerless requests, LF-only heads rejected as incomplete, 204/HEAD no-body, unsupported versions, oversized heads)
 - [x] Fuzz scaffolds committed: `fuzz/` with `http_head_parser`, `timer_wheel_tick`, `ws_frame_decode` (run with `cargo +nightly fuzz run <target>`)
-- [x] Benchmark against hyper: `benches/http.rs` compares tpt-net-http vs hyper 1.x HTTP/1.1 duplex round-trips (ours ~4.4 µs vs hyper ~8.5 µs on this micro-topology; ureq still open — blocking client needs a real socket)
+- [x] Benchmarks vs hyper and ureq: duplex round-trips (ours ~4.4 µs vs hyper ~8.5 µs) and real loopback TCP (ours vs ureq's blocking client, fresh TCP connection per request)
 
 ### `crates/tpt-net-ws`
 > Pure-Rust WebSocket framing, masking, ping/pong (client + server)

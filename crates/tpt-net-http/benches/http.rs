@@ -8,6 +8,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
+use std::io::Read as _;
 use tpt_async_io::TokioCompat;
 use tpt_net_http::prelude::*;
 
@@ -21,6 +22,14 @@ struct BenchHandler;
 
 impl Handler<Conn> for BenchHandler {
     async fn handle(&mut self, _request: &mut ServerRequest<'_, Conn>) -> ResponseData {
+        ResponseData::ok(RESPONSE_BODY.to_vec())
+    }
+}
+
+type TcpConn = TokioCompat<tokio::net::TcpStream>;
+
+impl Handler<TcpConn> for BenchHandler {
+    async fn handle(&mut self, _request: &mut ServerRequest<'_, TcpConn>) -> ResponseData {
         ResponseData::ok(RESPONSE_BODY.to_vec())
     }
 }
@@ -125,5 +134,113 @@ fn bench_hyper_roundtrip(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_ours_roundtrip, bench_hyper_roundtrip);
+criterion_group!(
+    benches,
+    bench_ours_roundtrip,
+    bench_ours_tcp_roundtrip,
+    bench_ureq_tcp_roundtrip,
+    bench_hyper_roundtrip
+);
 criterion_main!(benches);
+
+// ── ureq over real loopback TCP ──────────────────────────────────────────────
+//
+// ureq is a blocking std client, so the fair comparison runs both stacks
+// through real loopback TCP sockets (our server via the tokio driver, ureq
+// as a blocking caller on the criterion thread).
+
+fn bench_ureq_tcp_roundtrip(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+
+    // Bind a real loopback listener; serve accepted connections with our
+    // HTTP/1.1 server for the lifetime of the benchmark.
+    let listener = rt.block_on(async {
+        tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind")
+    });
+    let addr = listener.local_addr().expect("addr");
+
+    rt.spawn(async move {
+        loop {
+            let Ok((socket, _)) = listener.accept().await else {
+                break;
+            };
+            socket.set_nodelay(true).ok();
+            tokio::spawn(async move {
+                let _ = serve_connection(TokioCompat::new(socket), &mut BenchHandler).await;
+            });
+        }
+    });
+
+    let mut group = c.benchmark_group("http1_roundtrip");
+    group.throughput(criterion::Throughput::Bytes(RESPONSE_BODY.len() as u64));
+    group.bench_function("ureq_loopback_tcp", |b| {
+        b.iter(|| {
+            let response = ureq::get(&format!("http://{addr}/bench"))
+                .call()
+                .expect("ureq request");
+            assert_eq!(response.status(), 200);
+            let mut body = Vec::new();
+            response
+                .into_reader()
+                .read_to_end(&mut body)
+                .expect("ureq body");
+            assert_eq!(body, RESPONSE_BODY);
+        })
+    });
+    group.finish();
+}
+
+// ureq's round-trip includes a fresh TCP connection per request, so also
+// measure our stack the same way (fresh duplex + fresh connection per iter
+// is already the case in bench_ours_roundtrip; here fresh TCP for parity).
+fn bench_ours_tcp_roundtrip(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+
+    let listener = rt.block_on(async {
+        tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind")
+    });
+    let addr = listener.local_addr().expect("addr");
+
+    rt.spawn(async move {
+        loop {
+            let Ok((socket, _)) = listener.accept().await else {
+                break;
+            };
+            socket.set_nodelay(true).ok();
+            tokio::spawn(async move {
+                let _ = serve_connection(TokioCompat::new(socket), &mut BenchHandler).await;
+            });
+        }
+    });
+
+    let mut group = c.benchmark_group("http1_roundtrip");
+    group.throughput(criterion::Throughput::Bytes(RESPONSE_BODY.len() as u64));
+    group.bench_function("tpt_net_http_loopback_tcp", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let socket = tokio::net::TcpStream::connect(addr).await.expect("connect");
+                socket.set_nodelay(true).ok();
+                let mut conn = ClientConnection::new(TokioCompat::new(socket));
+                let mut response = conn
+                    .send(&Request::new("GET", "/bench"), "bench")
+                    .await
+                    .expect("send");
+                assert_eq!(response.status(), 200);
+                let body = response.body_bytes(4096).await.expect("body");
+                assert_eq!(body, RESPONSE_BODY);
+                drop(conn);
+            });
+        })
+    });
+    group.finish();
+}

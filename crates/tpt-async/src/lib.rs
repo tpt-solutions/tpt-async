@@ -37,6 +37,14 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs, clippy::all)]
 
+// `#[tpt_async::main]` drives a std executor: without the std feature the
+// generated main would fail deep inside the executor crate.  Fail here with
+// a clear message instead.
+#[cfg(all(feature = "macros", not(feature = "std")))]
+compile_error!(
+    "#[tpt_async::main] requires the `std` feature on tpt-async      (it drives the std-based LocalExecutor)"
+);
+
 // Re-export the proc-macro so `#[tpt_async::main]` resolves from this crate.
 #[cfg(feature = "macros")]
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]

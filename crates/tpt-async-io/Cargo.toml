@@ -9,7 +9,7 @@ authors       = { workspace = true }
 repository    = { workspace = true }
 homepage      = { workspace = true }
 documentation = { workspace = true }
-readme        = "../../README.md"
+readme        = "README.md"
 keywords      = ["async", "io", "no_std"]
 categories    = ["asynchronous", "embedded"]
 workspace   = "../.."
@@ -41,3 +41,7 @@ futures-util = { version = "0.3", features = ["io"] }
 [[bench]]
 name = "read_buf"
 harness = false
+
+[[example]]
+name = "duplex-echo"
+required-features = ["tokio"]

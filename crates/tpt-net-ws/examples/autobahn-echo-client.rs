@@ -18,8 +18,6 @@
 //! cargo run -p tpt-net-ws --example autobahn-echo-client -- 127.0.0.1 9001
 //! ```
 
-use std::time::Duration;
-
 use tpt_async_io::TokioCompat;
 use tpt_net_ws::prelude::*;
 

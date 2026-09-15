@@ -1,16 +1,19 @@
-# tpt-async (facade)
+# tpt-async
 
-The single-dependency entry point for the tpt-async runtime-agnostic async
-stack. Re-exports `tpt_async::prelude` from all sub-crates.
+> **The one-dependency facade for the tpt-async stack**
 
-## Quick start
+> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.75.
 
-```toml
-[dependencies]
-tpt-async = { version = "0.1", features = ["macros", "io"] }
-```
+## Overview
 
-```rust,no_run
+`tpt-async` re-exports the prelude of every sub-crate so applications
+need a single dependency: the executor, timer, I/O traits, and TLS -
+composed behind feature flags. `#[tpt_async::main]` (the `macros`
+feature) turns an `async fn main` into a running program.
+
+## Usage
+
+```rust
 use std::time::Duration;
 use tpt_async::prelude::*;
 
@@ -23,18 +26,27 @@ async fn main() -> Result<(), tpt_async::Timeout> {
 }
 ```
 
+## Highlights
+
+- **prelude** - executor + timer + core traits in one `use`
+- **`macros`** - `#[tpt_async::main]`
+- **`io` / `tls`** - I/O traits + TLS re-exports
+- **`spawn-tokio` / `spawn-smol`** - ready-made `Spawn` adapters for existing runtimes
+
 ## Feature flags
 
-| Flag         | Default | What it enables |
-|--------------|---------|-----------------|
-| `std`        | yes     | std features in sub-crates |
-| `alloc`      | yes     | `JoinHandle`, `Completer` |
-| `executor`   | yes     | `LocalExecutor`, `block_on` |
-| `timer`      | yes     | `Sleep`, `Interval`, `Timeout`, wheel, `sleep()`/`timeout()`/`interval()` |
-| `macros`     | no      | `#[tpt_async::main]` (implies `executor`) |
-| `io`         | no      | `AsyncRead`/`AsyncWrite` + ext traits + adapters |
-| `tls`        | no      | `tpt-net-tls` re-exports (implies `io`) |
-| `spawn-tokio`| no      | `impl Spawn` for tokio runtime handles |
-| `spawn-smol` | no      | `spawn_on_smol()` helper |
+| Flag | Enables |
+|------|---------|
+| `std/alloc/executor/timer (defaults)` | core stack |
+| `macros` | `#[tpt_async::main]` (implies executor) |
+| `io` | I/O traits + ext helpers |
+| `tls` | tpt-net-tls (implies io) |
+| `spawn-tokio / spawn-smol` | runtime adapters |
 
-See the [workspace README](../../README.md) for the full story.
+## Testing
+
+```sh
+cargo test -p tpt-async
+```
+
+See the [workspace README](https://github.com/tpt-solutions/tpt-async) for the full stack, examples, and design notes.

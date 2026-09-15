@@ -9,7 +9,7 @@ authors       = { workspace = true }
 repository    = { workspace = true }
 homepage      = { workspace = true }
 documentation = { workspace = true }
-readme        = "../../README.md"
+readme        = "README.md"
 keywords      = ["async", "no_std", "embedded", "timer"]
 categories    = ["asynchronous", "embedded", "no-std"]
 workspace   = "../.."
@@ -36,7 +36,8 @@ fugit = { version = "0.4", default-features = false, optional = true }
 fugit-timer = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
+criterion          = { workspace = true }
+tpt-async-executor = { workspace = true }
 
 [[bench]]
 name = "wheel"

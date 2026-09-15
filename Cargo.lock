@@ -1876,6 +1876,7 @@ dependencies = [
  "fugit",
  "fugit-timer",
  "spin",
+ "tpt-async-executor",
 ]
 
 [[package]]

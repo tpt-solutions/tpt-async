@@ -9,7 +9,7 @@ authors       = { workspace = true }
 repository    = { workspace = true }
 homepage      = { workspace = true }
 documentation = { workspace = true }
-readme        = "../../README.md"
+readme        = "README.md"
 keywords      = ["http", "client", "server", "async"]
 categories    = ["network-programming", "web-programming::http-client", "web-programming::http-server"]
 workspace   = "../.."

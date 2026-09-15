@@ -9,7 +9,7 @@ authors       = { workspace = true }
 repository    = { workspace = true }
 homepage      = { workspace = true }
 documentation = { workspace = true }
-readme        = "../../README.md"
+readme        = "README.md"
 keywords      = ["async", "no_std", "embedded", "futures"]
 categories    = ["asynchronous", "embedded", "no-std"]
 workspace     = "../.."

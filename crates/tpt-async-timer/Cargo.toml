@@ -32,7 +32,7 @@ fugit   = ["dep:fugit", "dep:fugit-timer"]
 # The wheel uses a spin mutex so it stays no_std-safe while still shareable
 # across threads.
 spin = { workspace = true }
-fugit = { version = "0.4", default-features = false, optional = true }
+fugit = { version = "0.6", default-features = false, optional = true }
 fugit-timer = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]

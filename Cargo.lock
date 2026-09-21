@@ -612,12 +612,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fugit"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60ee0e9ed8a394868ee05cde8705cbd8dbfc95f88e14a57134323e799bd3912a"
+dependencies = [
+ "gcd",
+]
+
+[[package]]
 name = "fugit-timer"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca8ef8e382f5d8c5160d4cba9fcd778b13bc79a5ebc585834ed0ac27e072ce80"
 dependencies = [
- "fugit",
+ "fugit 0.4.0",
  "nb",
 ]
 
@@ -1873,7 +1882,7 @@ name = "tpt-async-timer"
 version = "0.1.0"
 dependencies = [
  "criterion",
- "fugit",
+ "fugit 0.6.0",
  "fugit-timer",
  "spin",
  "tpt-async-executor",

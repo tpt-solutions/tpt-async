@@ -30,7 +30,7 @@ embedded-io = ["dep:embedded-io-async", "alloc"]
 tpt-async-core     = { workspace = true }
 tokio              = { version = "1", features = ["io-util", "net"], optional = true }
 async-std          = { version = "1", optional = true }
-embedded-io-async = { version = "0.6", optional = true }
+embedded-io-async = { version = "0.7", optional = true }
 
 [dev-dependencies]
 tokio     = { version = "1", features = ["full"] }

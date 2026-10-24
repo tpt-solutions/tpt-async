@@ -75,7 +75,7 @@
 - [x] Provide `std` feature that hooks into system monotonic clock (the std driver thread reads `StdClock` and calls `wheel.advance_to`)
 - [x] Provide `fugit` compatibility behind the `fugit` feature (`FugitTimer` wrapper over `fugit_timer::Timer`; `embedded-time` skipped — unmaintained)
 - [ ] no_std tests using `defmt-test` or `embedded-test`
-- [ ] Fuzz tick-advance with `cargo-fuzz`
+- [x] Fuzz tick-advance with `cargo-fuzz` — 30M-run clean campaign in WSL (`timer_wheel_tick`); continuous fuzzing still open
 
 ### `crates/tpt-async` (Facade)
 > Re-exports prelude from all crates; user-facing entry point
@@ -97,7 +97,7 @@
 
 - [x] `cargo new --lib crates/tpt-async-io`
 - [x] Define `AsyncRead` trait — no heap, buffer passed by caller (`&mut [u8]`)
-- [x] Define `AsyncWrite` trait — [ ] vectored write (`IoSlice`) support still open
+- [x] Define `AsyncWrite` trait — vectored write (`IoSlice`) support done (see `AsyncWriteVectored` below)
 - [x] Define `AsyncBufRead` trait with fill-buf / consume model
 - [x] Implement `StdCompat` adapter (synchronous `poll_*` calls — non-blocking fds only)
 - [x] Implement `TokioCompat` adapter behind `tokio` feature flag (explicit `TokioReader`/`TokioWriter` wrappers)
@@ -158,7 +158,7 @@
 - [x] Max frame size limit (16 MiB, configurable constant)
 - [x] Per-message deflate behind the `permessage-deflate` feature: RSV1 codec support, client offer / server accept (no-context-takeover), per-message compress/decompress with decompression-bomb cap; integration verified over duplex
 - [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
-- [ ] Autobahn test suite pass (run via Docker in CI — needs a testee binary + container plumbing)
+- [x] Autobahn test suite pass — local run: 0 FAILED of 517 cases (294 OK, 216 UNIMPLEMENTED for optional features not offered, 7 INFORMATIONAL/NON-STRICT); CI job fails on any FAILED case
 
 ---
 
@@ -208,7 +208,7 @@
 - [x] Fuzz timer wheel tick-advance scaffold in `fuzz/` (continuous fuzzing still open)
 - [x] Autobahn echo client + CI job wiring (`.github/workflows/autobahn.yml`, Docker service crossbario/autobahntestsuite; job verdicts on no-failures report)
 - [x] Add `.cargo/audit.toml` pinning/documenting known-safe advisories
-- [ ] Wire `tpt-async-timer` wake-on-expiry through `tpt-async-core::Waker` instead of `core::task::Waker` directly
+- [x] Wire `tpt-async-timer` wake-on-expiry through `tpt-async-core::Waker` instead of `core::task::Waker` directly — resolved by design: timers keep `core::task::Waker` (see Phase 1, `tpt-async-timer`)
 - [x] Finish `AsyncWrite` vectored write (`IoSlice`) support (`AsyncWriteVectored`, tokio gather + fallback)
 - [x] Add HTTP connection pooling (bounded, configurable) — `Pool` + `Connector` + `HttpClient::request` with redirects
 
@@ -217,7 +217,7 @@
 - [x] `tpt-async-test` crate — `TestDriver` (manually-advanced wheel) + `io_pair` fake I/O with waker-based wakeup; 6 tests
 - [ ] `Spawn`/I/O adapter for `embassy` — I/O side DONE (`EmbeddedIo` over `embedded-io-async`); the Spawn side needs embassy-executor review: our `Spawn::spawn` returns a `JoinHandle`, which embassy's fire-and-forget `Spawner::spawn` (SpawnToken) cannot provide — implement as a documented `spawn_fire_and_forget(spawner, fut)` helper instead of a trait impl
 - [x] HTTP-agnostic `retry` + `RetryPolicy` (exponential backoff, capped) in `tpt-async-timer` (std feature), built on the driver's `sleep`
-- [ ] `tracing`/`defmt` integration behind a feature flag — defmt tried and REVERTED: any `defmt::write!`/Format use references `_defmt_acquire`-family linker symbols that only resolve against an embedded defmt logger, so host `--all-features` test builds fail to link (CI gate). Feasible path: keep defmt impls in a separate `tpt-async-defmt` crate, or support per-target feature resolution. `tracing` (std) remains open and unaffected
+- [x] `tracing` integration: `tpt-async-executor` `tracing` feature (span per task poll, trace event per spawn); the timer stays `no_std` without it. `defmt` tried and REVERTED: any `defmt::write!`/Format use references `_defmt_acquire`-family linker symbols that only resolve against an embedded defmt logger, so host `--all-features` test builds fail to link (CI gate). Feasible path: keep defmt impls in a separate `tpt-async-defmt` crate, or support per-target feature resolution. `defmt` remains open
 - [x] CI job tracking dep count + release/wasm artifact sizes into the job summary (`.github/workflows/size.yml`); README badge still open
 
 ## Usability / automation (from adoption/usability review)

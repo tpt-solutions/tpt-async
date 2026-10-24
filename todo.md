@@ -122,7 +122,7 @@
 - [x] Certificate pinning helper: `PinnedCertVerifier` (SHA-256 pins, optional webpki fallback) + `pinned_connector`
 - [x] No `unsafe` beyond rustls internals
 - [x] Integration test: full TLS handshake against local `rcgen`-generated cert
-- [x] Dependency audit: `cargo deny check` green — licenses allow-list extended for webpki-roots (CDLA-Permissive-2.0), rustls bumped past RUSTSEC vuln, async-std/rustls-pemfile/ring advisories ignored with justifications
+- [x] Dependency audit: `cargo deny check` green — licenses allow-list extended for webpki-roots (CDLA-Permissive-2.0), rustls, rustls-webpki, tokio, and webpki-roots bumped past RUSTSEC advisories; only the ring advisory remains ignored (async-std and rustls-pemfile ignores removed: cargo-deny no longer matches them)
 
 ---
 

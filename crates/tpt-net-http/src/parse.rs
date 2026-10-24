@@ -237,15 +237,22 @@ fn find_head_end(buf: &[u8]) -> Result<Option<usize>, HttpError> {
         return Err(HttpError::Parse("message head exceeds 64 KiB"));
     }
     // Obsolete line folding (obs-fold) is rejected outright (RFC 9112 §5.2).
-    // Only scan up to the last *complete* line: the trailing partial line may
-    // already be body bytes; a fold inside it is caught once it completes.
-    if let Some(last_crlf) = buf.windows(2).rposition(|w| w == b"\r\n") {
-        let complete = &buf[..last_crlf];
-        if complete.windows(2).any(|w| w == b"\n ") || complete.windows(2).any(|w| w == b"\n\t") {
-            return Err(HttpError::Parse("obsolete line folding in header block"));
-        }
+    // Scan only the header block: once the head is complete, bytes after it
+    // are body (or WebSocket frames) and must not be read as headers.  Without
+    // a complete head, scan up to the last *complete* line, since the trailing
+    // partial line may still be incomplete; a fold in it is caught later.
+    let head_end = memchr_find(buf, HEADER_DELIM);
+    let scanned = match head_end {
+        Some(end) => &buf[..end],
+        None => match buf.windows(2).rposition(|w| w == b"\r\n") {
+            Some(last_crlf) => &buf[..last_crlf],
+            None => &buf[..0],
+        },
+    };
+    if scanned.windows(2).any(|w| w == b"\n ") || scanned.windows(2).any(|w| w == b"\n\t") {
+        return Err(HttpError::Parse("obsolete line folding in header block"));
     }
-    Ok(memchr_find(buf, HEADER_DELIM))
+    Ok(head_end)
 }
 
 /// The range of the first CRLF-terminated line of `head`.
@@ -404,6 +411,23 @@ mod tests {
         assert_eq!(head.version(), Version::Http11);
         assert_eq!(head.headers().get(b"Host"), Some(&b"example.com"[..]));
         assert_eq!(head.headers().get(b"CONTENT-LENGTH"), Some(&b"5"[..]));
+    }
+
+    #[test]
+    fn body_bytes_after_head_are_not_scanned_for_folding() {
+        // Frames or body bytes that follow the head may contain "\n " (as
+        // binary data readily does); they are not header lines.
+        let mut buf = b"HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\n\r\n".to_vec();
+        buf.extend_from_slice(b"\x81\x05 \nab\r\n c");
+        let parsed = parse_response_ranges(&buf).unwrap().unwrap();
+        assert_eq!(parsed.status, Some(101));
+        assert_eq!(parsed.consumed, buf.len() - b"\x81\x05 \nab\r\n c".len());
+    }
+
+    #[test]
+    fn rejects_folded_header_lines() {
+        let buf = b"HTTP/1.1 200 OK\r\nx-a: one\r\n two\r\n\r\n";
+        assert!(parse_response_ranges(buf).is_err());
     }
 
     #[test]

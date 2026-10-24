@@ -6,6 +6,12 @@
 //! thread.  It implements both [`Spawn`] and [`LocalSpawn`] from
 //! `tpt-async-core`.
 //!
+//! # Feature flags
+//!
+//! | Feature   | Default | Effect                                              |
+//! |-----------|---------|-----------------------------------------------------|
+//! | `tracing` | off     | `tracing` span per task poll, trace event per spawn |
+//!
 //! # Thread-safety model
 //!
 //! Futures are **polled only on the executor thread**, but the wakers handed
@@ -307,6 +313,8 @@ impl LocalExecutor {
             Some(e) => e,
             None => return, // already completed and deregistered
         };
+        #[cfg(feature = "tracing")]
+        let _span = tracing::trace_span!("tpt_async::poll_task", task_id = id).entered();
         entry.state.queued.store(false, Ordering::Release);
 
         let waker = waker_for(WakerData {
@@ -362,6 +370,8 @@ impl LocalExecutor {
         F::Output: 'static,
     {
         let (handle, completer) = Completer::new();
+        #[cfg(feature = "tracing")]
+        tracing::trace!("tpt_async::spawn");
         self.enqueue(Box::pin(async move {
             completer.complete(future.await);
         }));

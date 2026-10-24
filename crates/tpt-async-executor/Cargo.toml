@@ -20,9 +20,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
+# Emits a `tracing` span around each task poll and a trace event on spawn.
+tracing = ["dep:tracing"]
 
 [dependencies]
 tpt-async-core = { workspace = true, features = ["alloc"] }
+tracing        = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

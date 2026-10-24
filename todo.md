@@ -159,7 +159,8 @@
 - [x] Per-message deflate behind the `permessage-deflate` feature: RSV1 codec support, client offer / server accept (no-context-takeover), per-message compress/decompress with decompression-bomb cap; integration verified over duplex
 - [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
 - [x] Autobahn test suite pass — local run: 0 FAILED of 517 cases (294 OK, 216 UNIMPLEMENTED for optional features not offered, 7 INFORMATIONAL/NON-STRICT); CI job fails on any FAILED case
-  - [ ] `permessage-deflate` context takeover: with `--features permessage-deflate` the Autobahn run has 144 FAILED (cases 12.x/13.x, "did not finish within 60 seconds"). Current codec compresses each message independently and requires `server_no_context_takeover`; the Autobahn default offer does not, so later messages cannot be decompressed. CI does not enable the feature, so it is not gating.
+  - [x] `permessage-deflate` without context takeover: the handshake is refused unless the server commits to `server_no_context_takeover`, so the stall is now an explicit error. With the feature enabled the 12.x/13.x cases still fail (they test context takeover, which is not implemented). CI does not enable the feature, so it is not gating.
+  - [ ] `permessage-deflate` context takeover (full RFC 7692 §7.1.1): stateful compressor and decompressor per connection; would clear the 144 Autobahn 12.x/13.x cases
 
 ---
 
@@ -205,8 +206,8 @@
 
 ## Hardening (from adoption/usability review)
 
-- [x] Fuzz `tpt-net-http` head parser scaffold in `fuzz/` (continuous fuzzing still open)
-- [x] Fuzz timer wheel tick-advance scaffold in `fuzz/` (continuous fuzzing still open)
+- [x] Fuzz `tpt-net-http` head parser scaffold in `fuzz/` (nightly 10-min run in `.github/workflows/fuzz.yml`)
+- [x] Fuzz timer wheel tick-advance scaffold in `fuzz/` (nightly 10-min run in `.github/workflows/fuzz.yml`)
 - [x] Autobahn echo client + CI job wiring (`.github/workflows/autobahn.yml`, Docker service crossbario/autobahntestsuite; job verdicts on no-failures report)
 - [x] Add `.cargo/audit.toml` pinning/documenting known-safe advisories
 - [x] Wire `tpt-async-timer` wake-on-expiry through `tpt-async-core::Waker` instead of `core::task::Waker` directly — resolved by design: timers keep `core::task::Waker` (see Phase 1, `tpt-async-timer`)

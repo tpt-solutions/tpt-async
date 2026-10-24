@@ -57,8 +57,9 @@ pub enum Message {
 pub struct WebSocketStream<IO> {
     conn: HttpConnection<IO>,
     role: Role,
-    /// permessage-deflate negotiated (feature `permessage-deflate`).
-    deflate: bool,
+    /// permessage-deflate state, present when the extension was negotiated.
+    #[cfg(feature = "permessage-deflate")]
+    deflate: Option<crate::deflate::Codec>,
     /// Bytes read from the transport but not yet consumed by the codec.
     frame_buf: Vec<u8>,
     close_sent: bool,
@@ -70,7 +71,8 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         Self {
             conn,
             role,
-            deflate: false,
+            #[cfg(feature = "permessage-deflate")]
+            deflate: None,
             frame_buf: Vec::new(),
             close_sent: false,
             close_received: false,
@@ -79,7 +81,14 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
 
     /// Whether `permessage-deflate` was negotiated for this stream.
     pub fn deflate_negotiated(&self) -> bool {
-        self.deflate
+        #[cfg(feature = "permessage-deflate")]
+        {
+            self.deflate.is_some()
+        }
+        #[cfg(not(feature = "permessage-deflate"))]
+        {
+            false
+        }
     }
 
     /// Complete the *server-side* opening handshake on an established
@@ -132,13 +141,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         // sides to actually compress; otherwise the offer is declined and
         // messages stay uncompressed).
         #[cfg(feature = "permessage-deflate")]
-        let deflate_offer = headers.get(b"sec-websocket-extensions");
-        #[cfg(feature = "permessage-deflate")]
-        let deflate_negotiated = crate::deflate::server_accept(deflate_offer).is_some();
-        #[cfg(feature = "permessage-deflate")]
-        let accept_ext = crate::deflate::server_accept(deflate_offer);
-        #[cfg(not(feature = "permessage-deflate"))]
-        let deflate_negotiated = false;
+        let accept_ext = crate::deflate::server_accept(headers.get(b"sec-websocket-extensions"));
 
         let head = {
             #[cfg(feature = "permessage-deflate")]
@@ -157,8 +160,12 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         )
         .await?;
 
+        #[allow(unused_mut)]
         let mut ws = Self::from_conn(conn, Role::Server);
-        ws.deflate = deflate_negotiated;
+        #[cfg(feature = "permessage-deflate")]
+        if accept_ext.is_some() {
+            ws.deflate = Some(crate::deflate::Codec::server_default());
+        }
         Ok(ws)
     }
 
@@ -205,22 +212,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         let mut ws = Self::from_conn(conn, Role::Client);
         #[cfg(feature = "permessage-deflate")]
         if let Some(ext) = head.headers().get(b"sec-websocket-extensions") {
-            let contains = |needle: &[u8]| {
-                ext.windows(needle.len())
-                    .any(|w| w.eq_ignore_ascii_case(needle))
-            };
-            if contains(crate::deflate::EXTENSION_NAME.as_bytes()) {
-                // Context takeover is not implemented: every message is
-                // compressed on its own, so the server must commit to
-                // `server_no_context_takeover`. Otherwise later messages
-                // cannot be decoded, so the handshake is refused instead.
-                if !contains(b"server_no_context_takeover") {
-                    return Err(WsError::Handshake(
-                        "permessage-deflate requires server_no_context_takeover",
-                    ));
-                }
-                ws.deflate = true;
-            }
+            ws.deflate = crate::deflate::client_codec(ext)?;
         }
 
         Ok(ws)
@@ -253,10 +245,11 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         };
 
         #[cfg(feature = "permessage-deflate")]
-        let (rsv1, payload) = if self.deflate && matches!(opcode, Opcode::Text | Opcode::Binary) {
-            (true, crate::deflate::compress(&payload))
-        } else {
-            (false, payload)
+        let (rsv1, payload) = match self.deflate.as_mut() {
+            Some(codec) if matches!(opcode, Opcode::Text | Opcode::Binary) => {
+                (true, codec.compress(&payload)?)
+            }
+            _ => (false, payload),
         };
         #[cfg(not(feature = "permessage-deflate"))]
         let (rsv1, payload) = (false, payload);
@@ -304,6 +297,10 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
     async fn recv_message(&mut self) -> Result<Option<Message>, WsError> {
         let mut message_opcode: Option<Opcode> = None;
         let mut assembled = Vec::new();
+        // Whether the message being assembled is compressed (its first frame
+        // carried RSV1); the whole message is decompressed once at the end.
+        #[cfg(feature = "permessage-deflate")]
+        let mut message_compressed = false;
 
         loop {
             // Decode from buffered bytes, topping up from the transport.
@@ -327,17 +324,14 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
             // Per-message deflate: the first data frame of a compressed
             // message carries RSV1.
             #[cfg(feature = "permessage-deflate")]
-            let mut decoded = decoded;
-            #[cfg(feature = "permessage-deflate")]
             if decoded.rsv1 {
-                if !self.deflate {
+                if self.deflate.is_none() {
                     return Err(WsError::Protocol(
                         "RSV1 set but permessage-deflate was not negotiated",
                     ));
                 }
                 if matches!(decoded.opcode, Opcode::Text | Opcode::Binary) {
-                    decoded.payload =
-                        crate::deflate::decompress(&decoded.payload, frame::MAX_PAYLOAD)?;
+                    message_compressed = true;
                 }
             }
             #[cfg(not(feature = "permessage-deflate"))]
@@ -402,6 +396,12 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
             }
 
             if decoded.fin {
+                #[cfg(feature = "permessage-deflate")]
+                if message_compressed {
+                    if let Some(codec) = self.deflate.as_mut() {
+                        assembled = codec.decompress(&assembled, frame::MAX_PAYLOAD)?;
+                    }
+                }
                 return Ok(match message_opcode.take() {
                     Some(Opcode::Text) => Some(Message::Text(
                         String::from_utf8(assembled)

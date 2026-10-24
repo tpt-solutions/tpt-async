@@ -51,10 +51,17 @@ async fn connect_with_extensions(extensions: String) -> Result<(), WsError> {
 }
 
 #[tokio::test]
-async fn refuses_deflate_without_server_no_context_takeover() {
-    let err = connect_with_extensions("permessage-deflate".into())
+async fn accepts_deflate_with_context_takeover() {
+    connect_with_extensions("permessage-deflate".into())
         .await
-        .expect_err("server kept context takeover; handshake must be refused");
+        .expect("context takeover is supported in both directions");
+}
+
+#[tokio::test]
+async fn refuses_smaller_compressor_window() {
+    let err = connect_with_extensions("permessage-deflate; client_max_window_bits=10".into())
+        .await
+        .expect_err("a window below 15 cannot be honoured");
     assert!(matches!(err, WsError::Handshake(_)));
 }
 

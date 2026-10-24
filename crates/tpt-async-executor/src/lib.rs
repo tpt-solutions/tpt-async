@@ -24,6 +24,38 @@
 //! queue) but **not** `Send`: spawning and polling must happen on the thread
 //! that owns the executor.
 //!
+//! # Embassy
+//!
+//! `embassy-executor` spawns only futures from static `#[task]` pools, so a
+//! generic future cannot be handed to its `Spawner` directly. A fire-and-forget
+//! helper therefore boxes the future into one shared task:
+//!
+//! ```ignore
+//! use std::{boxed::Box, future::Future, pin::Pin};
+//!
+//! type Erased = Pin<Box<dyn Future<Output = ()> + 'static>>;
+//!
+//! #[embassy_executor::task(pool_size = 16)]
+//! async fn run_erased(future: Erased) {
+//!     future.await
+//! }
+//!
+//! /// Spawn `future` on `spawner`, discarding its output.
+//! fn spawn_fire_and_forget<F: Future<Output = ()> + 'static>(
+//!     spawner: embassy_executor::Spawner,
+//!     future: F,
+//! ) -> Result<(), embassy_executor::SpawnError> {
+//!     let token = run_erased(Box::pin(future))?;
+//!     spawner.spawn(token);
+//!     Ok(())
+//! }
+//! ```
+//!
+//! The pattern lives in the application, not this crate, for two reasons:
+//! embassy's executor needs a platform feature (`platform-cortex-m`,
+//! `platform-std`, ...) that this crate must not choose, and this crate is
+//! `std`-based, so bare-metal targets are not supported yet.
+//!
 //! # Example
 //!
 //! ```rust

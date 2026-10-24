@@ -2,7 +2,7 @@ name: Release automation
 
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   # release-plz opens a "chore: release" PR that bumps lock-step versions

@@ -3,7 +3,7 @@ name: Size report
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   # Keeps the "small footprint" claims honest: workspace dep count, release

@@ -9,7 +9,7 @@
 `tpt-async` re-exports the prelude of every sub-crate so applications
 need a single dependency: the executor, timer, I/O traits, and TLS -
 composed behind feature flags. `#[tpt_async::main]` (the `macros`
-feature) turns an `async fn main` into a running program..
+feature) turns an `async fn main` into a running program.
 
 ## Usage
 

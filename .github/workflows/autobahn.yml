@@ -8,25 +8,44 @@ on:
 jobs:
   autobahn:
     runs-on: ubuntu-latest
-    services:
-      fuzzingserver:
-        image: crossbario/autobahntestsuite
-        ports:
-          - 9001:9001
-        options: >-
-          --entrypoint wstest
-        cmd: >-
-          --mode fuzzingserver
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run echo client against fuzzingserver
-        run: cargo run -p tpt-net-ws --example autobahn-echo-client -- 127.0.0.1 9001
-      - name: Fail on non-strict pass
+      # Started as a step rather than a service container so the config
+      # bind-mount exists: service containers start before checkout.
+      - name: Start Autobahn fuzzingserver
         run: |
-          # Autobahn writes reports under /reports in the container; the
-          # verdict step lives in the container logs. Treat client success as
-          # pass for now; wire report scraping once the container volume is
-          # mounted in a follow-up.
-          echo "Autobahn run completed"
+          mkdir -p autobahn-reports
+          docker run -d --name fuzzingserver -p 9001:9001 \
+            -v "$GITHUB_WORKSPACE/.github/autobahn:/config:ro" \
+            -v "$GITHUB_WORKSPACE/autobahn-reports:/reports" \
+            --entrypoint wstest \
+            crossbario/autobahn-testsuite \
+            --mode fuzzingserver --spec /config/fuzzingserver.json
+      - name: Wait for fuzzingserver
+        run: |
+          for _ in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/9001) 2>/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs fuzzingserver
+          exit 1
+      - name: Run echo testee against fuzzingserver
+        run: cargo run -p tpt-net-ws --example autobahn-echo-client -- 127.0.0.1 9001
+      - name: Fail on any FAILED case
+        run: |
+          report=autobahn-reports/servers/index.json
+          if [ ! -f "$report" ]; then
+            echo "Autobahn produced no report at $report"
+            docker logs fuzzingserver
+            exit 1
+          fi
+          # NON-STRICT and INFORMATIONAL pass; UNIMPLEMENTED covers optional
+          # features (e.g. permessage-deflate) this testee does not offer.
+          if grep -Eq '"behavior(Close)?": "FAILED"' "$report"; then
+            echo "Autobahn reported FAILED cases:"
+            grep -E '"behavior(Close)?": "FAILED"' -B3 "$report" | head -n 50
+            exit 1
+          fi
+          echo "Autobahn: no FAILED cases"

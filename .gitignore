@@ -25,3 +25,9 @@ tarpaulin-report.json
 
 # Fuzz
 /fuzz/target/
+/fuzz/artifacts/
+/fuzz/corpus/
+/fuzz/*.log
+
+# Autobahn local/CI report output
+/autobahn-reports/

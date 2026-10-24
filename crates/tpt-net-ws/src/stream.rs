@@ -13,6 +13,14 @@ use crate::error::WsError;
 use crate::frame::{self, Frame, Opcode, Role};
 use crate::handshake;
 
+/// Protocol-violation reason for invalid UTF-8; `recv` maps it to close 1007.
+const INVALID_UTF8: &str = "invalid UTF-8 in message";
+
+/// RFC 6455 §7.4.2: status codes a peer may send in a Close frame.
+fn is_valid_close_code(code: u16) -> bool {
+    matches!(code, 1000..=1003 | 1007..=1011 | 3000..=4999)
+}
+
 /// Trim ASCII whitespace around a byte slice.
 fn trim_ows(value: &[u8]) -> &[u8] {
     let mut start = 0;
@@ -270,7 +278,24 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
     /// Receive the next message, transparently handling `Ping` (auto-`Pong`),
     /// fragmentation, and the closing handshake.  `Ok(None)` = the peer
     /// closed.
+    ///
+    /// A protocol violation is answered with a `Close` frame before the error
+    /// is returned: status 1007 for invalid UTF-8, 1002 for everything else.
     pub async fn recv(&mut self) -> Result<Option<Message>, WsError> {
+        match self.recv_message().await {
+            Err(WsError::Protocol(reason)) => {
+                if !self.close_sent {
+                    let code = if reason == INVALID_UTF8 { 1007 } else { 1002 };
+                    // Best effort: the connection is failing either way.
+                    let _ = self.send(Message::Close(Some((code, String::new())))).await;
+                }
+                Err(WsError::Protocol(reason))
+            }
+            other => other,
+        }
+    }
+
+    async fn recv_message(&mut self) -> Result<Option<Message>, WsError> {
         let mut message_opcode: Option<Opcode> = None;
         let mut assembled = Vec::new();
 
@@ -316,6 +341,11 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
                 ));
             }
 
+            if !decoded.fin && matches!(decoded.opcode, Opcode::Ping | Opcode::Pong | Opcode::Close)
+            {
+                return Err(WsError::Protocol("fragmented control frame"));
+            }
+
             match decoded.opcode {
                 Opcode::Ping => {
                     self.send(Message::Pong(decoded.payload.clone())).await?;
@@ -325,16 +355,22 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
                     return Ok(Some(Message::Pong(decoded.payload)));
                 }
                 Opcode::Close => {
+                    // Validate the status code and reason before echoing them.
+                    let info = match decoded.payload.len() {
+                        0 => None,
+                        1 => return Err(WsError::Protocol("close payload of one byte")),
+                        _ => {
+                            let code = u16::from_be_bytes([decoded.payload[0], decoded.payload[1]]);
+                            if !is_valid_close_code(code) {
+                                return Err(WsError::Protocol("invalid close status code"));
+                            }
+                            let reason = core::str::from_utf8(&decoded.payload[2..])
+                                .map_err(|_| WsError::Protocol(INVALID_UTF8))?;
+                            Some((code, reason.to_owned()))
+                        }
+                    };
                     if !self.close_sent {
                         // Echo the close, preserving the status code.
-                        let info = if decoded.payload.len() >= 2 {
-                            Some((
-                                u16::from_be_bytes([decoded.payload[0], decoded.payload[1]]),
-                                String::from_utf8_lossy(&decoded.payload[2..]).into_owned(),
-                            ))
-                        } else {
-                            None
-                        };
                         self.send(Message::Close(info)).await?;
                     }
                     self.close_received = true;
@@ -363,7 +399,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
                 return Ok(match message_opcode.take() {
                     Some(Opcode::Text) => Some(Message::Text(
                         String::from_utf8(assembled)
-                            .map_err(|_| WsError::Protocol("invalid UTF-8 in text message"))?,
+                            .map_err(|_| WsError::Protocol(INVALID_UTF8))?,
                     )),
                     Some(Opcode::Binary) => Some(Message::Binary(assembled)),
                     _ => return Err(WsError::Protocol("final frame without a message")),

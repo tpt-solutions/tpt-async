@@ -1,12 +1,15 @@
 // Copyright TPT Solutions
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Autobahn testsuite echo client (fuzzingclient mode).
+//! Autobahn testsuite echo testee.
 //!
-//! Pairs with the Autobahn testsuite running in fuzzing**server** mode:
+//! Pairs with the Autobahn testsuite running in fuzzing**server** mode. The
+//! fuzzing server drives everything over WebSocket (`/getCaseCount`,
+//! `/runCase`, `/updateReports`), so this testee speaks WebSocket on all of
+//! those paths:
 //!
 //! ```sh
-//! docker run --rm -p 9001:9001 crossbario/autobahntestsuite \
+//! docker run --rm -p 9001:9001 crossbario/autobahn-testsuite \
 //!     wstest --mode fuzzingserver --spec /config/fuzzingserver.json
 //! ```
 //!
@@ -40,21 +43,20 @@ fn main() {
 async fn run(host: &str, port: u16) {
     let authority = format!("{host}:{port}");
 
-    // 1. Ask the server how many cases exist.
+    // 1. Ask the server how many cases exist (a single text message).
     let count = {
         let io = tokio::net::TcpStream::connect(&authority)
             .await
             .expect("tcp connect");
-        let mut conn = tpt_net_http::ClientConnection::new(TokioCompat::new(io));
-        let mut resp = conn
-            .send(&tpt_net_http::Request::new("GET", "/getCaseCount"), host)
+        let mut ws = WebSocketStream::connect(TokioCompat::new(io), "/getCaseCount", &authority)
             .await
-            .expect("case count request");
-        let body = resp.body_bytes(64).await.expect("case count body");
-        String::from_utf8_lossy(&body)
-            .trim()
-            .parse::<usize>()
-            .expect("case count")
+            .expect("case count handshake");
+        let count = match ws.recv().await.expect("case count message") {
+            Some(Message::Text(text)) => text.trim().parse::<usize>().expect("case count"),
+            other => panic!("expected case count text, got {other:?}"),
+        };
+        let _ = ws.close(1000).await;
+        count
     };
     println!("autobahn: {count} cases");
 
@@ -64,7 +66,7 @@ async fn run(host: &str, port: u16) {
         let io = tokio::net::TcpStream::connect(&authority)
             .await
             .expect("tcp connect for case");
-        let mut ws = match WebSocketStream::connect(TokioCompat::new(io), &path, host).await {
+        let mut ws = match WebSocketStream::connect(TokioCompat::new(io), &path, &authority).await {
             Ok(ws) => ws,
             Err(e) => {
                 eprintln!("case {case}: handshake failed: {e}");
@@ -74,6 +76,9 @@ async fn run(host: &str, port: u16) {
 
         loop {
             match ws.recv().await {
+                // Unsolicited Pongs are not echoed: the spec requires the
+                // testee to send nothing back for them.
+                Ok(Some(Message::Pong(_))) => continue,
                 Ok(Some(message)) => {
                     if ws.send(message).await.is_err() {
                         break;
@@ -89,18 +94,17 @@ async fn run(host: &str, port: u16) {
         println!("autobahn: case {case} done");
     }
 
-    // 3. Ask for the report.
+    // 3. Ask the server to regenerate its reports, then close.
     let io = tokio::net::TcpStream::connect(&authority)
         .await
         .expect("tcp connect");
-    let mut conn = tpt_net_http::ClientConnection::new(TokioCompat::new(io));
-    let mut resp = conn
-        .send(
-            &tpt_net_http::Request::new("GET", &format!("/updateReports?agent=tpt-async")),
-            host,
-        )
-        .await
-        .expect("update reports");
-    let _ = resp.body_bytes(4096).await;
+    let mut ws = WebSocketStream::connect(
+        TokioCompat::new(io),
+        "/updateReports?agent=tpt-async",
+        &authority,
+    )
+    .await
+    .expect("update reports handshake");
+    let _ = ws.close(1000).await;
     println!("autobahn: reports updated — see the fuzzingserver report page");
 }

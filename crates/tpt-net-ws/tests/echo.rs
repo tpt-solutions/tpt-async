@@ -142,7 +142,6 @@ async fn fragmented_message_is_assembled() {
         Some([9, 10, 11, 12]),
         &mut raw,
     );
-    use tokio::io::AsyncWriteExt as _;
     client_io
         .write_all(&handshake)
         .await

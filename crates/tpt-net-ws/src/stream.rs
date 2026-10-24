@@ -204,17 +204,23 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
         #[allow(unused_mut)]
         let mut ws = Self::from_conn(conn, Role::Client);
         #[cfg(feature = "permessage-deflate")]
-        if head
-            .headers()
-            .get(b"sec-websocket-extensions")
-            .map(|v| v.to_vec())
-            .map(|v| {
-                v.windows(crate::deflate::EXTENSION_NAME.len())
-                    .any(|w| w.eq_ignore_ascii_case(crate::deflate::EXTENSION_NAME.as_bytes()))
-            })
-            .unwrap_or(false)
-        {
-            ws.deflate = true;
+        if let Some(ext) = head.headers().get(b"sec-websocket-extensions") {
+            let contains = |needle: &[u8]| {
+                ext.windows(needle.len())
+                    .any(|w| w.eq_ignore_ascii_case(needle))
+            };
+            if contains(crate::deflate::EXTENSION_NAME.as_bytes()) {
+                // Context takeover is not implemented: every message is
+                // compressed on its own, so the server must commit to
+                // `server_no_context_takeover`. Otherwise later messages
+                // cannot be decoded, so the handshake is refused instead.
+                if !contains(b"server_no_context_takeover") {
+                    return Err(WsError::Handshake(
+                        "permessage-deflate requires server_no_context_takeover",
+                    ));
+                }
+                ws.deflate = true;
+            }
         }
 
         Ok(ws)

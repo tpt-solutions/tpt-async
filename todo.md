@@ -160,7 +160,7 @@
 - [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
 - [x] Autobahn test suite pass — local run: 0 FAILED of 517 cases (294 OK, 216 UNIMPLEMENTED for optional features not offered, 7 INFORMATIONAL/NON-STRICT); CI job fails on any FAILED case
   - [x] `permessage-deflate` context takeover (RFC 7692 §7.1.1): per-connection stateful compressor and decompressor; `no_context_takeover` honoured per direction; fragmented compressed messages decompressed once after assembly. With `--features permessage-deflate` the Autobahn run now has 7 FAILED of 517 (was 144): 12.2.9, 12.2.14, 12.3.10, 12.3.15–12.3.18 (64–128 KiB echoes). The codec is verified against zlib with shared context; the cause of those 7 is open. CI does not enable the feature, so it is not gating.
-  - [ ] `permessage-deflate` 12.2.9 / 12.2.14 / 12.3.10 / 12.3.15–18: large compressed echoes truncate or stall at the peer; investigate with a packet capture
+  - [ ] `permessage-deflate` 12.2.9 / 12.2.14: the peer receives a 65352-byte echo of a 65536-byte message, although we receive all 65536 bytes and every compressed message we produce or receive decodes correctly under zlib. Next step: packet capture of the echo frames versus a known-good peer.
 
 ---
 

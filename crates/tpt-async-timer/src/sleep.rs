@@ -117,7 +117,7 @@ impl<const SLOTS: usize, const LEVELS: usize> Future for Sleep<'_, SLOTS, LEVELS
             .entry
             .waker
             .as_ref()
-            .map_or(true, |w| !w.will_wake(waker))
+            .is_none_or(|w| !w.will_wake(waker))
         {
             this.entry.waker = Some(waker.clone());
         }

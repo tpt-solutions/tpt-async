@@ -213,7 +213,7 @@ impl<const SLOTS: usize, const LEVELS: usize> Inner<SLOTS, LEVELS> {
         // Level k cascades when current_tick is a multiple of SLOTS^k.
         let mut width = SLOTS as u64;
         for level in 1..LEVELS {
-            if self.current_tick % width == 0 {
+            if self.current_tick.is_multiple_of(width) {
                 let slot = ((self.current_tick / width) % SLOTS as u64) as usize;
                 self.cascade(level, slot);
             } else {

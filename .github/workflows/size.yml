@@ -38,10 +38,12 @@ jobs:
 
       - name: WASM artifact size
         run: |
-          cargo build -p wasm-example --target wasm32-unknown-unknown
+          # examples/wasm is excluded from the workspace, so it has its own
+          # Cargo.lock and target dir; build it via its manifest path.
+          cargo build --manifest-path examples/wasm/Cargo.toml --target wasm32-unknown-unknown
           {
             echo "### WASM artifact (debug, unoptimized)"
             echo '```'
-            ls -la target/wasm32-unknown-unknown/debug/*.wasm | awk '{print $9, $5}'
+            ls -la examples/wasm/target/wasm32-unknown-unknown/debug/*.wasm | awk '{print $9, $5}'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

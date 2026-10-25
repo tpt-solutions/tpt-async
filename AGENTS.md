@@ -1,6 +1,6 @@
 # AGENTS.md — tpt-async
 
-Runtime-agnostic async I/O + networking stack for Rust: `no_std`-capable from Cortex-M/RISC-V/WASM up to servers. 9-crate Cargo workspace, edition 2021, **MSRV 1.75** (RPITIT required), lock-step version `0.1.0` across all crates (bump all together).
+Runtime-agnostic async I/O + networking stack for Rust: `no_std`-capable from Cortex-M/RISC-V/WASM up to servers. 9-crate Cargo workspace, edition 2021, **MSRV 1.88** (RPITIT required), lock-step version `0.1.0` across all crates (bump all together).
 
 ## Commands
 
@@ -47,7 +47,7 @@ Do not add upward (left-to-right) dependencies; layers only depend downward. Eac
 - The facade's `macros` feature is **not default** — `#[tpt_async::main]` requires `tpt-async` with `features = ["macros"]`.
 - Dependabot runs weekly (Mondays); `rustls` is pinned to patch bumps only — major/minor rustls updates need manual review.
 - Most tests are inline (`#[cfg(test)]`); integration tests currently exist only in `tpt-net-tls/tests/`.
-- CI (`.github/workflows/ci.yml`) runs on push to `main` and PRs: test matrix (Linux/Windows × stable/1.75), clippy, fmt, docs, the three cross-target builds, and cargo-deny.
+- CI (`.github/workflows/ci.yml`) runs on push to `main` and PRs: test matrix (Linux/Windows × stable/1.88), clippy, fmt, docs, the three cross-target builds, and cargo-deny.
 
 ## Conventions
 

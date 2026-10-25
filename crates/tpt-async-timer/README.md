@@ -2,7 +2,7 @@
 
 > **Heapless hierarchical timer wheel - from Cortex-M to cloud**
 
-> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.75.
+> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.88.
 
 ## Overview
 

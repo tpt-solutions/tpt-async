@@ -2,7 +2,7 @@
 
 > **rustls 0.23 wrapper - TLS 1.3 by default, no OpenSSL**
 
-> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.75.
+> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.88.
 
 ## Overview
 

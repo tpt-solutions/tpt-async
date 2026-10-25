@@ -19,7 +19,7 @@ body:
     id: constraints
     attributes:
       label: Does this respect the workspace invariants?
-      description: no `async-trait`, no OpenSSL, `no_std` where advertised, MSRV 1.75
+      description: no `async-trait`, no OpenSSL, `no_std` where advertised, MSRV 1.88
       options:
         - label: Yes, or N/A
           required: true

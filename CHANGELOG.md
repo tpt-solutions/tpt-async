@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- MSRV raised from Rust 1.75 to Rust 1.88 (`rust-version` in the workspace, CI test matrix, and docs). Current dependencies, including `time` 0.3.55 and `trybuild` 1.0.121, require 1.88 and edition 2024 support in Cargo
+
 ### Added
 - Initial workspace structure with 9 crates
 - `tpt-async-core`: `Spawn`, `LocalSpawn` traits; `JoinHandle`; Waker utilities

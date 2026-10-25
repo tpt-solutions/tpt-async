@@ -2,7 +2,7 @@
 
 > **RFC 6455 WebSocket client/server - pure Rust, no callbacks**
 
-> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.75.
+> Part of the [tpt-async](https://github.com/tpt-solutions/tpt-async) runtime-agnostic async stack. Licensed MIT OR Apache-2.0. MSRV 1.88.
 
 ## Overview
 

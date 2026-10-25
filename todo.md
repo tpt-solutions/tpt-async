@@ -1,7 +1,7 @@
 # tpt-async — Development Checklist
 
 > **License:** MIT OR Apache-2.0 · **Copyright:** TPT Solutions  
-> **MSRV:** Rust 1.75 (async fn in traits stable)  
+> **MSRV:** Rust 1.88 (async fn in traits stable)  
 > **Versioning:** Lock-step 0.1.0 across all crates  
 > **Crates:** 9 total (7 spec + tpt-async-macros + tpt-async facade)
 
@@ -167,7 +167,7 @@
 ## CI / Infrastructure
 
 - [x] `.github/workflows/ci.yml` — matrix:
-  - [x] `x86_64-unknown-linux-gnu` — stable Rust + MSRV 1.75 (`cargo test --workspace`)
+  - [x] `x86_64-unknown-linux-gnu` — stable Rust + MSRV 1.88 (`cargo test --workspace`)
   - [x] `x86_64-pc-windows-msvc` — stable (`cargo test --workspace`)
   - [x] `thumbv7em-none-eabihf` — stable (`cargo build --no-std` check crates)
   - [x] `riscv32imac-unknown-none-elf` — stable (no_std build check)

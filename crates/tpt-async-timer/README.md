@@ -38,13 +38,14 @@ let _ = MissedTickBehavior::Skip; // Burst / Delay / Skip
 - **`Sleep` / `Timeout`** - shared-reference futures; drop-safe deregistration
 - **`Interval` + `MissedTickBehavior`** - Burst / Delay / Skip catch-up policies
 - **std driver** - background thread + `sleep`/`timeout`/`interval` free functions
+- **`retry` / `RetryPolicy`** - exponential-backoff retry combinator built on the std driver's `sleep`
 - **`fugit` compat** - `FugitTimer` bridges RTIC-compatible timers via the `fugit` feature
 
 ## Feature flags
 
 | Flag | Enables |
 |------|---------|
-| `std (default)` | driver thread + free functions |
+| `std (default)` | driver thread, `sleep`/`timeout`/`interval` free functions, `retry` |
 | `alloc` | reserved |
 | `fugit` | `fugit_timer::Timer` compatibility |
 

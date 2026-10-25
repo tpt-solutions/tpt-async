@@ -54,7 +54,6 @@ assert_eq!(s, Some(Conn::Open));
 |------|---------|
 | `alloc (default)` | `JoinHandle`, `Completer`, `Task`, closure waker |
 | `std` | `std::error::Error` impls on error types |
-| `defmt-03` | `defmt::Format` impls for error types (embedded logging) |
 
 ## Testing
 

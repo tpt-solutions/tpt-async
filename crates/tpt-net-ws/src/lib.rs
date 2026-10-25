@@ -44,4 +44,4 @@ pub mod stream;
 
 pub use error::WsError;
 pub use frame::Opcode;
-pub use stream::{Message, WebSocketStream};
+pub use stream::{KeepAlive, Message, WebSocketStream};

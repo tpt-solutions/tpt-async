@@ -5,13 +5,29 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::time::Duration;
 
 use tpt_async_io::{AsyncRead, AsyncWrite};
+use tpt_async_timer::driver::timeout;
 use tpt_net_http::connection::HttpConnection;
 
 use crate::error::WsError;
 use crate::frame::{self, Frame, Opcode, Role};
 use crate::handshake;
+
+/// Timer-driven keepalive policy for a [`WebSocketStream`].
+///
+/// After `interval` without any inbound bytes the stream sends a `Ping`. If
+/// nothing arrives within a further `timeout`, [`recv`](WebSocketStream::recv)
+/// fails with [`WsError::TimedOut`] so a dead peer cannot hold the connection
+/// open forever.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeepAlive {
+    /// Idle time before a `Ping` is sent.
+    pub interval: Duration,
+    /// How long to wait for any inbound bytes after that `Ping`.
+    pub timeout: Duration,
+}
 
 /// Protocol-violation reason for invalid UTF-8; `recv` maps it to close 1007.
 const INVALID_UTF8: &str = "invalid UTF-8 in message";
@@ -64,6 +80,9 @@ pub struct WebSocketStream<IO> {
     frame_buf: Vec<u8>,
     close_sent: bool,
     close_received: bool,
+    keepalive: Option<KeepAlive>,
+    /// A keepalive `Ping` has been sent and no inbound bytes have arrived since.
+    ping_outstanding: bool,
 }
 
 impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
@@ -76,7 +95,16 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
             frame_buf: Vec::new(),
             close_sent: false,
             close_received: false,
+            keepalive: None,
+            ping_outstanding: false,
         }
+    }
+
+    /// Enable (`Some`) or disable (`None`) timer-driven keepalive. Disabled by
+    /// default. Takes effect on the next [`recv`](Self::recv).
+    pub fn set_keepalive(&mut self, policy: Option<KeepAlive>) {
+        self.keepalive = policy;
+        self.ping_outstanding = false;
     }
 
     /// Whether `permessage-deflate` was negotiated for this stream.
@@ -310,7 +338,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
                     break frame;
                 }
                 let mut chunk = [0u8; 8192];
-                let n = self.conn.read_raw(&mut chunk).await?;
+                let n = self.read_with_keepalive(&mut chunk).await?;
                 if n == 0 {
                     return if self.close_received {
                         Ok(None)
@@ -429,6 +457,34 @@ impl<IO: AsyncRead + AsyncWrite + Unpin> WebSocketStream<IO> {
     /// Whether the peer has completed the closing handshake.
     pub fn is_closed(&self) -> bool {
         self.close_sent && self.close_received
+    }
+
+    /// Read transport bytes, sending keepalive `Ping`s while the peer is idle.
+    ///
+    /// Cancelling is safe: partial frames stay in `frame_buf`, so the codec
+    /// resumes where it left off on the next call.
+    async fn read_with_keepalive(&mut self, chunk: &mut [u8]) -> Result<usize, WsError> {
+        let Some(policy) = self.keepalive else {
+            return Ok(self.conn.read_raw(chunk).await?);
+        };
+        loop {
+            let wait = if self.ping_outstanding {
+                policy.timeout
+            } else {
+                policy.interval
+            };
+            match timeout(wait, self.conn.read_raw(chunk)).await {
+                Ok(read) => {
+                    self.ping_outstanding = false;
+                    return Ok(read?);
+                }
+                Err(_) if self.ping_outstanding => return Err(WsError::TimedOut),
+                Err(_) => {
+                    self.send(Message::Ping(Vec::new())).await?;
+                    self.ping_outstanding = true;
+                }
+            }
+        }
     }
 
     fn check_control(payload: &[u8]) -> Result<(), WsError> {

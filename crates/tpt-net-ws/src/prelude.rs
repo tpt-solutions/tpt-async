@@ -2,4 +2,4 @@
 
 pub use crate::error::WsError;
 pub use crate::frame::MAX_PAYLOAD;
-pub use crate::stream::{Message, WebSocketStream};
+pub use crate::stream::{KeepAlive, Message, WebSocketStream};

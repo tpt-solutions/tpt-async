@@ -10,3 +10,7 @@ version (see the workspace [CHANGELOG](../../CHANGELOG.md) for stack-wide change
 ### Added
 - `TlsConnector`/`TlsAcceptor` over rustls 0.23 (TLS 1.3 default)
 - `rustls_config`, PEM loaders, certificate pinning, handshake timeouts
+
+### Changed
+- MSRV raised from Rust 1.75 to Rust 1.88
+- `sha2` dependency moved to 0.11

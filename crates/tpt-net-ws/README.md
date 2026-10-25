@@ -10,8 +10,11 @@ WebSocket built directly on `tpt-net-http` framing and the
 `tpt-async-io` traits: a real opening handshake, a bounds-checked
 frame codec with role-checked masking, message fragmentation assembly,
 automatic ping/pong, a proper closing handshake, and a 16 MiB payload
-cap. Optional `permessage-deflate` compression (RFC 7692,
-no-context-takeover) behind a feature flag.
+cap. Optional idle keepalive (timer-driven pings) is off by default.
+Optional `permessage-deflate` compression (RFC 7692) sits behind a
+feature flag: the client offers context takeover, our server commits
+to `no_context_takeover` in both directions, and each side decodes
+whatever the peer negotiated.
 
 ## Usage
 
@@ -28,6 +31,13 @@ use tpt_net_ws::prelude::*;
 // while let Some(msg) = ws.recv().await? {
 //     ws.send(msg).await?; // echo
 // }
+
+// Keepalive: ping after 30 s of silence; fail recv() if the peer
+// stays silent for 10 s more.
+// ws.set_keepalive(Some(tpt_net_ws::KeepAlive {
+//     interval: Duration::from_secs(30),
+//     timeout: Duration::from_secs(10),
+// }));
 ```
 
 ## Highlights
@@ -35,7 +45,8 @@ use tpt_net_ws::prelude::*;
 - **handshake** - client + server upgrade with SHA-1 accept (known-answer tested)
 - **frame codec** - bounds-checked, role-aware masking, extended lengths, control-frame limits
 - **messages** - fragmentation assembly, UTF-8 validation, auto-pong, close handshake
-- **`permessage-deflate`** - RFC 7692 compression with a decompression-bomb cap
+- **keepalive** - `set_keepalive(Some(KeepAlive { interval, timeout }))` pings an idle peer; `recv` fails with `WsError::TimedOut` if it stays silent. Disabled by default
+- **`permessage-deflate`** - RFC 7692 compression with context takeover support and a decompression-bomb cap
 
 ## Feature flags
 

@@ -27,6 +27,11 @@ use tpt_net_http::prelude::*;
 
 // Server: keep-alive loop + RPITIT handler (no async-trait):
 // serve_connection(io, &mut handler).await?;
+
+// Routing: exact (method, path) matches. A Router is itself a Handler:
+// let mut router = Router::new()
+//     .get("/health", |_req| Box::pin(async { ResponseData::ok("ok") }));
+// serve_connection(io, &mut router).await?;
 ```
 
 ## Highlights
@@ -34,6 +39,7 @@ use tpt_net_http::prelude::*;
 - **zero-copy headers** - `Arc` + byte ranges; no per-header allocation
 - **`ClientConnection` / `Request`** - builder-style requests, streaming response bodies
 - **`serve_connection`** - keep-alive server loop with `Handler` trait
+- **`router::Router`** - exact `(method, path)` routing: `405` for a known path under another method, `404` by default, `fallback` to replace it
 - **pooling + redirects** - bounded per-host `Pool`, `Connector` trait, max-hops redirects
 - **HTTP/2 (`http2`)** - `serve_h2` server + `Http2Connection` client via h2
 - **strict framing** - smuggling vectors rejected: TE+CL, dual CL, obs-fold

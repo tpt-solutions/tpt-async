@@ -37,7 +37,7 @@ let connector = TlsConnector::new(rustls_config().expect("trust store"));
 - **`connect_timeout` / `accept_timeout`** - handshake deadlines via the timer driver
 - **`rustls_config()`** - locked-down client config (ring, TLS 1.3, root store validated)
 - **`load_pem_certs` / `load_pem_key`** - PEM helpers built on rustls-pemfile
-- **`pinned_connector`** - SHA-256 certificate pinning, optional webpki fallback
+- **`pinned_connector`** - SHA-256 certificate pinning
 
 ## Feature flags
 

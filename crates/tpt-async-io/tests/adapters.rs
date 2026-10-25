@@ -54,7 +54,7 @@ async fn std_adapter_roundtrip_with_cursor() {
     let mut buf = [0u8; 4];
     let mut chunks = 0;
     let mut raw_total = 0;
-    let mut raw_fut = pin!(async {
+    let raw_fut = pin!(async {
         loop {
             let mut read_buf = ReadBuf::new(&mut buf);
             std::future::poll_fn(|cx| Pin::new(&mut reader).poll_read(cx, &mut read_buf))

@@ -366,8 +366,6 @@ mod tests {
     fn fake_pair_write_after_peer_gone_fails() {
         let (mut a, b) = io_pair();
         drop(b);
-        let waker = noop_waker();
-        let mut cx = Context::from_waker(&waker);
         assert!(
             std::future::poll_fn(|cx| Pin::new(&mut a).poll_write(cx, b"x"))
                 .await_spin()

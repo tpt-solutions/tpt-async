@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `tpt-async-timer`: an entry inserted with a deadline that had already passed fired only after a full wrap of the level-0 slots (up to `SLOTS - 1` ticks late) instead of on the next tick, which the docs promised
+- `tpt-async-timer`: `TimerWheel::len()` and `is_empty()` over-counted entries after each cascade (a deadline past the first level was counted twice per level it moved through). Firing was unaffected
+- `tpt-net-ws`: `permessage-deflate` with context takeover could emit a message whose sync flush was cut short, so the peer decoded extra bytes (Autobahn 12.2.9 and 12.2.14 failed; the Autobahn run with the feature enabled is now clean)
 - `tpt-net-http`: keep-alive is preserved when a request has `Content-Length: 0` and the handler does not read the body. Our client sends that header on every GET, so previously each such request closed the connection
 
 ### Changed

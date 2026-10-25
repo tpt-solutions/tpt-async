@@ -24,7 +24,7 @@ Tooling: `cargo-nextest`, `cargo-deny`; targets `thumbv7em-none-eabihf`, `riscv3
 |---|---|---|
 | 0 | `tpt-async-core` | `Spawn`/`LocalSpawn` traits, waker utils. **Must stay `#![no_std]`**; `alloc`/`std` features |
 | 0 | `tpt-async-timer` | Heapless const-generic timer wheel. **Must stay `#![no_std]`**; depends only on core |
-| 1 | `tpt-async-executor` | Optional cooperative `LocalExecutor`/`block_on`; needs core+alloc. `work-stealing` feature reserved |
+| 1 | `tpt-async-executor` | Optional cooperative `LocalExecutor`/`block_on`; needs core+alloc. work-stealing executor planned for Phase 2+ (no feature flag yet) |
 | 1 | `tpt-async-io` | `AsyncRead`/`AsyncWrite` traits; tokio/async-std adapters behind `tokio`/`async-std` features |
 | 1 | `tpt-async-macros` | `#[tpt_async::main]` proc-macro (trybuild UI tests) |
 | 2 | `tpt-net-tls` | rustls 0.23 wrapper, std only |

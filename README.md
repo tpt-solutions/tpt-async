@@ -135,7 +135,7 @@ echo over in-memory pipes — lives in
 - ✅ Core traits, executor, heapless timers (+ std driver), I/O traits & adapters, TLS wrapper (TLS 1.3 default, certificate pinning), HTTP/1.1 client/server (zero-copy parser, keep-alive, chunked bodies, connection pooling, redirects), HTTP/2 client/server (`http2` feature), WebSocket (handshake, fragmentation, ping/pong, close, 16 MiB cap, Autobahn suite passing in CI)
 - ✅ `permessage-deflate` (RFC 7692) behind a feature flag, with a decompression-bomb cap
 - ✅ Exact-match HTTP router (`tpt_net_http::router::Router`) and timer-driven WebSocket keepalive (`KeepAlive`)
-- 🚧 Open: 7 Autobahn cases still fail when `permessage-deflate` is enabled (CI does not enable it yet); `work-stealing` executor (Phase 2+) — see [`todo.md`](todo.md)
+- 🚧 Open: `permessage-deflate` passes the Autobahn suite locally (0 failed cases) but CI does not enable it yet; a work-stealing executor is planned for Phase 2+ — see [`todo.md`](todo.md)
 
 ## License
 

@@ -29,7 +29,7 @@
 - [x] Set `#![no_std]` with `extern crate alloc` behind `alloc` feature flag
 - [x] Define `Spawn` trait — implemented by user's runtime or default executor
 - [x] Define `JoinHandle<T>` + `Completer` types (alloc)
-- [x] Define standalone `Task` type (alloc): cancel-on-drop handle with `detach()`; no-alloc callers use raw traits (true alloc-free spawn still open)
+- [x] Define standalone `Task` type (alloc): cancel-on-drop handle with `detach()`; no-alloc callers use the timer, I/O traits and waker utilities directly. Deferred past `v0.1.0`: an alloc-free spawn needs a static task pool (new unsafe executor) that no current crate depends on
 - [x] Implement custom `RawWaker` / `Waker` construction utilities
 - [x] Write zero-cost state machine helper: `state_machine!` declarative macro (plain enums + const `match` transition fn, fully no_std)
 - [x] Define `LocalSpawn` trait for single-threaded contexts
@@ -57,7 +57,7 @@
 - [x] Implement `LocalSpawn` trait from `tpt-async-core`
 - [x] Add `block_on(future)` (currently a `LocalExecutor` method, not a free function)
 - [x] No `unsafe` except where strictly required for Waker raw pointer handling; document all `unsafe` blocks
-- [ ] Feature flag `work-stealing` — reserved for Phase 2+ (empty stub feature removed to avoid false advertising)
+- [x] Feature flag `work-stealing` — the empty stub was removed (see CHANGELOG); a work-stealing executor remains a Phase 2+ idea, not a feature
 - [x] Unit tests: nested spawns, waker re-use, duplicate-wake coalescing, cross-thread wake, task cancellation on executor drop
 - [x] Benchmark vs. `tokio::task::LocalSet` with criterion (`benches/localset.rs`)
 
@@ -74,8 +74,8 @@
 - [x] Resolved by design: timer futures store `core::task::Waker` (the wake type executors consume); tpt-async-core's waker utilities are construction helpers used by executors, not by waiter futures — no integration needed
 - [x] Provide `std` feature that hooks into system monotonic clock (the std driver thread reads `StdClock` and calls `wheel.advance_to`)
 - [x] Provide `fugit` compatibility behind the `fugit` feature (`FugitTimer` wrapper over `fugit_timer::Timer`; `embedded-time` skipped — unmaintained)
-- [ ] no_std tests using `defmt-test` or `embedded-test`
-- [x] Fuzz tick-advance with `cargo-fuzz` — 30M-run clean campaign in WSL (`timer_wheel_tick`); continuous fuzzing still open
+- [ ] no_std tests using `defmt-test` or `embedded-test` (host-side part done: `tests/no_std_api.rs` runs the Sleep/Timeout/Interval API with `--no-default-features`; on-target tests still open)
+- [x] Fuzz tick-advance with `cargo-fuzz` — 30M-run clean campaign in WSL (`timer_wheel_tick`). The target now checks `len()` against a model and varies deadlines; the old version never cascaded (every deadline was 0) and missed two bugs. The same model runs on every platform as `tests/wheel_model.rs`. Continuous fuzzing still open (the nightly job is 10 minutes)
 
 ### `crates/tpt-async` (Facade)
 > Re-exports prelude from all crates; user-facing entry point
@@ -161,7 +161,7 @@
 - [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
 - [x] Autobahn test suite pass — local run: 0 FAILED of 517 cases (294 OK, 216 UNIMPLEMENTED for optional features not offered, 7 INFORMATIONAL/NON-STRICT); CI job fails on any FAILED case
   - [x] `permessage-deflate` context takeover (RFC 7692 §7.1.1): per-connection stateful compressor and decompressor; `no_context_takeover` honoured per direction; fragmented compressed messages decompressed once after assembly. With `--features permessage-deflate` the Autobahn run now has 7 FAILED of 517 (was 144): 12.2.9, 12.2.14, 12.3.10, 12.3.15–12.3.18 (64–128 KiB echoes). The codec is verified against zlib with shared context; the cause of those 7 is open. CI does not enable the feature, so it is not gating.
-  - [ ] `permessage-deflate` 12.2.9 / 12.2.14: the peer receives a 65352-byte echo of a 65536-byte message, although we receive all 65536 bytes and every compressed message we produce or receive decodes correctly under zlib. Next step: packet capture of the echo frames versus a known-good peer.
+  - [x] `permessage-deflate` 12.2.9 / 12.2.14 (fixed): `Codec::compress` exited its sync-flush loop before zlib wrote the `00 00 FF FF` marker when context takeover was active, so the peer decoded 4 extra bytes of garbage (65356 instead of 65536). The loop now exits only once the output ends with the marker. Regression: `takeover_sync_flush_is_complete_for_large_messages` (`src/deflate.rs`) and `tests/deflate_large_echo.rs`. Local Autobahn run with `--features permessage-deflate`: 0 FAILED of 514 (the earlier 7-case result is gone too). The CI Autobahn job now runs with the feature enabled, so this is gated.
 
 ---
 
@@ -172,7 +172,7 @@
   - [x] `x86_64-pc-windows-msvc` — stable (`cargo test --workspace`)
   - [x] `thumbv7em-none-eabihf` — stable (`cargo build --no-std` check crates)
   - [x] `riscv32imac-unknown-none-elf` — stable (no_std build check)
-  - [x] `wasm32-unknown-unknown` — stable (`cargo build` only; `wasm-pack test --headless` still open)
+  - [x] `wasm32-unknown-unknown` — stable (`cargo build`; `wasm-pack test --headless --chrome` runs the timer tests in `examples/wasm/tests/web.rs` in CI)
 - [x] `cargo clippy --workspace --all-features -- -D warnings` in CI
 - [x] `cargo fmt --check` in CI
 - [x] `cargo doc --workspace --no-deps` — no warnings in CI

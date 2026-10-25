@@ -124,9 +124,9 @@ impl<const SLOTS: usize, const LEVELS: usize> Inner<SLOTS, LEVELS> {
     fn choose_slot(&self, deadline: u64) -> (usize, usize) {
         let delta = deadline.saturating_sub(self.current_tick);
         if delta == 0 {
-            // Already due (or overdue): park it in the current level-0 slot;
-            // it drains on the next `tick` at the latest.
-            let slot = (self.current_tick % SLOTS as u64) as usize;
+            // Already due: the current tick has drained, so park it in the
+            // level-0 slot that drains on the next tick.
+            let slot = ((self.current_tick + 1) % SLOTS as u64) as usize;
             return (0, slot);
         }
 
@@ -145,7 +145,16 @@ impl<const SLOTS: usize, const LEVELS: usize> Inner<SLOTS, LEVELS> {
     }
 
     /// Insert an entry (see [`TimerWheel::insert`] for the contract).
-    pub(crate) fn insert(&mut self, mut entry: NonNull<TimerEntry>) {
+    pub(crate) fn insert(&mut self, entry: NonNull<TimerEntry>) {
+        // SAFETY: caller guarantees the pointer is valid, immovable while
+        // registered, and not currently registered in any wheel.
+        let deadline = unsafe { entry.as_ref() }.deadline;
+        let (level, slot) = self.choose_slot(deadline);
+        self.link(level, slot, entry);
+    }
+
+    /// Link an unregistered entry at the front of `heads[level][slot]`.
+    fn link(&mut self, level: usize, slot: usize, mut entry: NonNull<TimerEntry>) {
         // SAFETY: caller guarantees the pointer is valid, immovable while
         // registered, and not currently registered in any wheel.
         let e = unsafe { entry.as_mut() };
@@ -153,8 +162,6 @@ impl<const SLOTS: usize, const LEVELS: usize> Inner<SLOTS, LEVELS> {
             !e.is_registered(),
             "TimerEntry inserted while already registered"
         );
-
-        let (level, slot) = self.choose_slot(e.deadline);
 
         // Link at the front of heads[level][slot].
         let head_ptr: *mut Option<NonNull<TimerEntry>> = &mut self.heads[level][slot];
@@ -254,11 +261,19 @@ impl<const SLOTS: usize, const LEVELS: usize> Inner<SLOTS, LEVELS> {
             let node = unsafe { node_ptr.as_mut() };
             cursor = node.next.take();
             node.prev_next = None; // temporarily unregistered
+                                   // `link` counts the entry again, so release the old count first.
+            self.pending -= 1;
 
-            // Re-insert at the correct (lower) level.
+            // An entry whose deadline is reached must fire in this tick, so it
+            // goes into the level-0 slot that drains right after this cascade.
+            let (level, slot) = if node.deadline <= self.current_tick {
+                (0, (self.current_tick % SLOTS as u64) as usize)
+            } else {
+                self.choose_slot(node.deadline)
+            };
             // SAFETY: node is still in place; we just cleared its registration
-            // state so the insert preconditions hold.
-            self.insert(node_ptr);
+            // state so the link preconditions hold.
+            self.link(level, slot, node_ptr);
         }
     }
 }
@@ -562,6 +577,29 @@ mod tests {
     }
 
     #[test]
+    fn len_is_exact_across_cascades() {
+        // Each cascade re-inserts the entry; the count must not grow with it.
+        let wheel = Wheel::new();
+        static WOKEN: AtomicU32 = AtomicU32::new(0);
+
+        with_entry!(70u64, entry_ptr, {
+            // SAFETY: valid stack storage.
+            unsafe { entry_ptr.as_mut() }.waker = Some(make_waker(&WOKEN));
+            // SAFETY: not registered anywhere yet.
+            unsafe { wheel.insert(entry_ptr) };
+            assert_eq!(wheel.len(), 1);
+
+            for t in 1..70 {
+                wheel.tick();
+                assert_eq!(wheel.len(), 1, "len wrong at tick {t}");
+            }
+            wheel.tick();
+            assert_eq!(WOKEN.load(Ordering::SeqCst), 1);
+            assert_eq!(wheel.len(), 0, "fired entry still counted");
+        });
+    }
+
+    #[test]
     fn double_cascade_deep_level() {
         // Deadline 70 > 8^2 = 64, so it starts on level 2 (slot 70/64 % 8 = 1)
         // and must cascade twice before firing exactly at tick 70.
@@ -585,21 +623,21 @@ mod tests {
 
     #[test]
     fn overdue_entry_fires_on_slot_drain() {
-        // An entry whose deadline has already passed parks in the *current*
-        // level-0 slot and fires when that slot next drains.
+        // An entry whose deadline has already passed fires on the next tick,
+        // not after a full wrap of the slots.
         let wheel = Wheel::new();
         static WOKEN: AtomicU32 = AtomicU32::new(0);
 
         with_entry!(0u64, entry_ptr, {
             // SAFETY: valid stack storage.
             unsafe { entry_ptr.as_mut() }.waker = Some(make_waker(&WOKEN));
-            // Insert at now == 0 with deadline 0: parked in slot 0.
+            // Insert at now == 0 with deadline 0: already due.
             // SAFETY: not registered anywhere yet.
             unsafe { wheel.insert(entry_ptr) };
+            assert_eq!(WOKEN.load(Ordering::SeqCst), 0, "fired at insert");
 
-            // Slot 0 drains when current_tick % 8 == 0, i.e. after 8 ticks.
-            wheel.tick_n(8);
-            assert_eq!(WOKEN.load(Ordering::SeqCst), 1);
+            wheel.tick();
+            assert_eq!(WOKEN.load(Ordering::SeqCst), 1, "overdue entry late");
         });
     }
 

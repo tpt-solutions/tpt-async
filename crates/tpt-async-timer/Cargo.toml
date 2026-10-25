@@ -42,3 +42,7 @@ tpt-async-executor = { workspace = true }
 [[bench]]
 name = "wheel"
 harness = false
+
+[[example]]
+name = "timers"
+required-features = ["std"]

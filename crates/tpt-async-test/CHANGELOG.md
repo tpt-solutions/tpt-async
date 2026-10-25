@@ -10,3 +10,6 @@ version (see the workspace [CHANGELOG](../../CHANGELOG.md) for stack-wide change
 ### Added
 - `TestDriver` deterministic timer wheel
 - `io_pair` fake I/O transports
+
+### Changed
+- MSRV raised from Rust 1.75 to Rust 1.88

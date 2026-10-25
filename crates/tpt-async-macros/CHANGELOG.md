@@ -9,3 +9,6 @@ version (see the workspace [CHANGELOG](../../CHANGELOG.md) for stack-wide change
 
 ### Added
 - `#[tpt_async::main]` with optional `executor = "path"` runner
+
+### Changed
+- MSRV raised from Rust 1.75 to Rust 1.88

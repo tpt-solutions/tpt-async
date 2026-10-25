@@ -34,7 +34,7 @@ let mut rb = ReadBuf::new(&mut buf);
 - **`ReadBuf`** - write-once cursor tracking the filled sub-slice
 - **ext helpers** - `read_exact`, `read_to_end`, `write_all`, `flush`, `shutdown`
 - **`AsyncWriteVectored`** - scatter/gather with tokio gather support + fallback
-- **adapters** - `StdReader/Writer`, `TokioReader/Writer/Compat`, `AsyncStdReader/Writer`, `EmbeddedSerial`
+- **adapters** - `StdReader/Writer`, `TokioReader/Writer/Compat`, `AsyncStdReader/Writer`, `EmbeddedIo`
 
 ## Feature flags
 

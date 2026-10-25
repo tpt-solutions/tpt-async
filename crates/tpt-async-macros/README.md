@@ -13,6 +13,15 @@ enough - no direct executor dependency, no hygiene surprises.
 `Result` returns become process exit codes; a third-party runner can
 be selected with `executor = "path::to::run"`.
 
+The macro is re-exported by the facade behind its `macros` feature,
+which is off by default, and it needs the facade's `std` feature
+because it drives the std-based executor:
+
+```toml
+[dependencies]
+tpt-async = { version = "0.1", features = ["macros"] }
+```
+
 ## Usage
 
 ```rust

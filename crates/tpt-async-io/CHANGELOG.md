@@ -11,3 +11,6 @@ version (see the workspace [CHANGELOG](../../CHANGELOG.md) for stack-wide change
 - `AsyncRead`/`AsyncWrite`/`AsyncBufRead` traits + `ReadBuf`
 - `AsyncReadExt`/`AsyncWriteExt`, `AsyncWriteVectored`
 - Adapters: std, tokio (reader/writer/compat), async-std, embedded-io
+
+### Changed
+- MSRV raised from Rust 1.75 to Rust 1.88

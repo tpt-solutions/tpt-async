@@ -18,12 +18,19 @@ use std::time::Duration;
 use tpt_async::prelude::*;
 
 #[tpt_async::main]
-async fn main() -> Result<(), tpt_async::Timeout> {
+async fn main() -> Result<(), TimedOut> {
     sleep(Duration::from_millis(10)).await;
     let answer = timeout(Duration::from_secs(1), async { 42 }).await?;
     println!("answer: {answer}");
     Ok(())
 }
+```
+
+`#[tpt_async::main]` needs the `macros` feature, which is off by default:
+
+```toml
+[dependencies]
+tpt-async = { version = "0.1", features = ["macros"] }
 ```
 
 ## Highlights
@@ -38,7 +45,7 @@ async fn main() -> Result<(), tpt_async::Timeout> {
 | Flag | Enables |
 |------|---------|
 | `std/alloc/executor/timer (defaults)` | core stack |
-| `macros` | `#[tpt_async::main]` (implies executor) |
+| `macros` | `#[tpt_async::main]` (implies executor; requires `std`, enforced with a compile error) |
 | `io` | I/O traits + ext helpers |
 | `tls` | tpt-net-tls (implies io) |
 | `spawn-tokio / spawn-smol` | runtime adapters |

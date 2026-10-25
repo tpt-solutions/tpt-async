@@ -26,7 +26,7 @@ driver.advance(10); // time moves only when you say so
 
 ## Highlights
 
-- **`TestDriver`** - manually-advanced wheel; advance by ticks or to a deadline
+- **`TestDriver`** - manually-advanced wheel; advance by ticks (`advance`) or to an absolute deadline (`advance_until`)
 - **`io_pair`** - connected `FakeIo` transports: waker wakeup, drain-to-EOF, `BrokenPipe`
 
 ## Testing

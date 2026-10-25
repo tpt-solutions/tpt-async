@@ -35,12 +35,14 @@ executor.block_on(async move {
 - **`run_until_stalled`** - drain ready tasks without a driving future
 - **thread-safe wakers** - wake from any thread; std::task::Wake based, no raw-pointer tricks
 - **cancel-on-drop** - `spawn_task` returns a `Task` that cancels when dropped; `detach()` for fire-and-forget
+- **`tracing` (optional)** - a span per task poll and a trace event per spawn
 
 ## Feature flags
 
 | Flag | Enables |
 |------|---------|
 | `(none)` | the executor is std-based; bring your own for no_std |
+| `tracing` | a `tracing` span around each task poll and a trace event on spawn (off by default) |
 
 ## Testing
 

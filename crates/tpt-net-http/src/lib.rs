@@ -49,6 +49,7 @@ pub mod error;
 pub mod http2;
 pub mod parse;
 pub mod prelude;
+pub mod router;
 pub mod server;
 
 pub use client::{ClientConnection, Connector, HttpClient, OwnedResponse, Pool, Request, Response};

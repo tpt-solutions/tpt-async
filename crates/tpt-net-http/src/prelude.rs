@@ -5,4 +5,5 @@ pub use crate::client::{
 };
 pub use crate::error::HttpError;
 pub use crate::parse::HeaderBlock;
+pub use crate::router::Router;
 pub use crate::server::{headers, serve_connection, Handler, ResponseData, ServerRequest};

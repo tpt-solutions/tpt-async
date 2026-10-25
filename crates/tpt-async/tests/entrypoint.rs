@@ -14,6 +14,13 @@ use tpt_async::prelude::*;
 
 #[tpt_async::main]
 async fn main() -> Result<(), &'static str> {
+    // nextest queries harness-less binaries with `--list` and expects libtest's
+    // terse `name: test` lines; answer that instead of running the body.
+    if std::env::args().any(|arg| arg == "--list") {
+        println!("main: test");
+        return Ok(());
+    }
+
     let start = Instant::now();
     sleep(Duration::from_millis(25)).await;
     assert!(

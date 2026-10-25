@@ -29,6 +29,8 @@ jobs:
         uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace --all-features
       - run: cargo test --workspace --all-features --doc
+      # The timer's runtime checks must also pass in its no_std configuration.
+      - run: cargo test -p tpt-async-timer --no-default-features --tests
 
   # ── Clippy ───────────────────────────────────────────────────────────────────
   clippy:
@@ -110,6 +112,26 @@ jobs:
           -p tpt-async-core
           -p tpt-async-timer --no-default-features --features alloc
           -p tpt-async-executor
+
+  # ── WASM in a real browser ───────────────────────────────────────────────────
+  wasm-browser:
+    name: wasm-pack test (headless Chrome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: examples/wasm
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - name: Run timer tests in headless Chrome
+        working-directory: examples/wasm
+        run: wasm-pack test --headless --chrome
 
   # ── cargo-deny ───────────────────────────────────────────────────────────────
   deny:

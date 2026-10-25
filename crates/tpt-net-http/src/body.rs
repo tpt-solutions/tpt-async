@@ -116,7 +116,10 @@ impl<'c, IO: AsyncRead + Unpin> BodyReader<'c, IO> {
             kind,
             remaining,
             chunk_remaining: 0,
-            finished: matches!(kind, BodyKind::Empty),
+            // A zero-length body is already complete; without this, a request
+            // with `Content-Length: 0` (which our client sends on every GET)
+            // would look unfinished and drop keep-alive.
+            finished: matches!(kind, BodyKind::Empty | BodyKind::ContentLength(0)),
         }
     }
 

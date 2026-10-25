@@ -4,8 +4,10 @@
 //! `tpt-async` ecosystem.  The provided [`LocalExecutor`](crate::prelude)
 //! from `tpt-async-executor` implements both.
 
+#[cfg(feature = "alloc")]
 use core::future::Future;
 
+#[cfg(feature = "alloc")]
 use crate::error::SpawnError;
 
 #[cfg(feature = "alloc")]

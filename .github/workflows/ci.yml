@@ -76,9 +76,9 @@ jobs:
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
       - run: >
-          cargo build --target thumbv7em-none-eabihf
-          -p tpt-async-core --no-default-features
-          -p tpt-async-timer --no-default-features
+          cargo build --target thumbv7em-none-eabihf --no-default-features
+          -p tpt-async-core
+          -p tpt-async-timer
 
   # ── no_std: RISC-V ───────────────────────────────────────────────────────────
   no-std-riscv:
@@ -91,9 +91,9 @@ jobs:
           targets: riscv32imac-unknown-none-elf
       - uses: Swatinem/rust-cache@v2
       - run: >
-          cargo build --target riscv32imac-unknown-none-elf
-          -p tpt-async-core --no-default-features
-          -p tpt-async-timer --no-default-features
+          cargo build --target riscv32imac-unknown-none-elf --no-default-features
+          -p tpt-async-core
+          -p tpt-async-timer
 
   # ── WASM ─────────────────────────────────────────────────────────────────────
   wasm:
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check
-          arguments: --all-features
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny --all-features check

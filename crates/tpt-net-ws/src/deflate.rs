@@ -65,14 +65,22 @@ impl Codec {
         let mut consumed = 0usize;
         loop {
             out.reserve(256);
+            let (before_in, before_out) = (consumed, out.len());
             self.compressor
                 .compress_vec(&data[consumed..], &mut out, FlushCompress::Sync)
                 .map_err(|_| WsError::Protocol("deflate compression failed"))?;
             consumed = (self.compressor.total_in() - start) as usize;
-            // Sync flush is complete once all input is consumed and zlib left
-            // room in the output buffer.
-            if consumed == data.len() && out.len() < out.capacity() {
+            // The sync flush is complete only once all input is consumed and the
+            // marker is in the output. zlib can return with spare room before it
+            // has written the marker, and a truncated stream decodes wrongly
+            // under context takeover (Autobahn 12.2.9 / 12.2.14).
+            if consumed == data.len() && out.ends_with(&SYNC_TAIL) {
                 break;
+            }
+            // No input consumed and no output produced: zlib has nothing left
+            // to write, so the loop would spin forever.
+            if consumed == before_in && out.len() == before_out {
+                return Err(WsError::Protocol("deflate sync flush stalled"));
             }
         }
         if out.ends_with(&SYNC_TAIL) {
@@ -224,6 +232,32 @@ mod tests {
         let data: Vec<u8> = (0..=255u8).cycle().take(1024).collect();
         let compressed = tx.compress(&data).unwrap();
         assert_eq!(rx.decompress(&compressed, MAX).unwrap(), data);
+    }
+
+    /// Regression for Autobahn 12.2.9 / 12.2.14: with context takeover, a
+    /// message whose sync flush was cut short left a stream that decoded to
+    /// extra bytes. Sizes near 64 KiB of incompressible data hit that case.
+    #[test]
+    fn takeover_sync_flush_is_complete_for_large_messages() {
+        let (mut tx, mut rx) = pair();
+        for i in 0..500u64 {
+            let len = 60_000 + (i as usize * 37) % 6_000;
+            let mut state = (i + 1) | 1;
+            let data: Vec<u8> = (0..len)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    (state >> 24) as u8
+                })
+                .collect();
+            let compressed = tx.compress(&data).unwrap();
+            assert_eq!(
+                rx.decompress(&compressed, MAX).unwrap(),
+                data,
+                "message {i} (len {len}) did not round-trip"
+            );
+        }
     }
 
     #[test]

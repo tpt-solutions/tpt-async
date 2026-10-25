@@ -32,7 +32,8 @@ jobs:
           docker logs fuzzingserver
           exit 1
       - name: Run echo testee against fuzzingserver
-        run: cargo run -p tpt-net-ws --example autobahn-echo-client -- 127.0.0.1 9001
+        # permessage-deflate is enabled so the compressed cases are gated too.
+        run: cargo run -p tpt-net-ws --features permessage-deflate --example autobahn-echo-client -- 127.0.0.1 9001
       - name: Fail on any FAILED case
         run: |
           report=autobahn-reports/servers/index.json

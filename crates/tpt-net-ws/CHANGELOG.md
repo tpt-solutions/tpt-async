@@ -9,4 +9,5 @@ version (see the workspace [CHANGELOG](../../CHANGELOG.md) for stack-wide change
 
 ### Added
 - RFC 6455 `WebSocketStream`: handshake, frames, fragmentation, ping/pong, close
+- Timer-driven keepalive: `WebSocketStream::set_keepalive(Some(KeepAlive { interval, timeout }))`; `recv` fails with `WsError::TimedOut` if a peer stays silent after a keepalive `Ping`
 - `permessage-deflate` compression (feature-gated)

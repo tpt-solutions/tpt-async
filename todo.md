@@ -3,7 +3,7 @@
 > **License:** MIT OR Apache-2.0 · **Copyright:** TPT Solutions  
 > **MSRV:** Rust 1.88 (async fn in traits stable)  
 > **Versioning:** Lock-step 0.1.0 across all crates  
-> **Crates:** 9 total (7 spec + tpt-async-macros + tpt-async facade)
+> **Crates:** 10 total (7 spec + tpt-async-macros + tpt-async facade + tpt-async-test)
 
 ---
 
@@ -12,7 +12,7 @@
 - [x] `cargo new --workspace tpt-async` — create workspace root
 - [x] Set `resolver = "2"` in root `Cargo.toml`
 - [x] Add all 9 crates to `[workspace.members]`
-- [x] Add `[workspace.package]` block: `version = "0.1.0"`, `edition = "2021"`, `rust-version = "1.75"`, `license = "MIT OR Apache-2.0"`, `authors = ["TPT Solutions"]`
+- [x] Add `[workspace.package]` block: `version = "0.1.0"`, `edition = "2021"`, `rust-version = "1.88"`, `license = "MIT OR Apache-2.0"`, `authors = ["TPT Solutions"]`
 - [x] Create `LICENSE-MIT` and `LICENSE-APACHE` files in workspace root
 - [x] Add `[workspace.dependencies]` for shared pinned deps (rustls 0.23, etc.)
 - [x] Create `.cargo/config.toml` with target aliases for no_std builds
@@ -138,7 +138,7 @@
   - [x] `.timeout(Duration)` integration with `tpt-async-timer` (TLS connect/accept timeouts; request timeouts via `tpt_async::timeout`)
   - [x] Connection pooling: bounded per-host `Pool` + `Connector` trait; `HttpClient::request` returns owned responses
   - [x] Redirect following (max-hops, relative/absolute Location resolution)
-- [x] HTTP/1.1 server: `serve_connection` keep-alive loop with RPITIT `Handler` trait (Router still open)
+- [x] HTTP/1.1 server: `serve_connection` keep-alive loop with RPITIT `Handler` trait; `router::Router` for exact `(method, path)` routing (405 on method mismatch, 404 default, custom fallback). Boxes route futures, so it allocates per request
 - [x] HTTP/2 client and server behind the `http2` feature (`h2` crate): `serve_h2` with `Http2Handler` (per-stream tokio tasks), `Http2Connection::connect`/`request` client, owned `H2Request`/`OwnedH2Response`; duplex round-trip tests
 - [x] Streaming body readers (`Content-Length`, chunked, EOF-framed) with size caps
 - [x] `Request` builder (method, target, headers, body; host/content-length auto-added)
@@ -154,7 +154,8 @@
 - [x] Frame parser/serialiser: text, binary, continuation, ping, pong, close (bounds-checked, role-checked masking)
 - [x] Masking/unmasking for client frames (RFC 6455 §5.3)
 - [x] `WebSocketStream` type wrapping `tpt-async-io` transport (fragmentation assembly, auto-pong, close handshake)
-- [x] Ping answered with Pong automatically (timer-driven keepalive scheduling still open)
+- [x] Ping answered with Pong automatically
+- [x] Timer-driven keepalive: `set_keepalive(Some(KeepAlive { interval, timeout }))` pings after idle and fails `recv` with `TimedOut` when the peer stays silent (tests in `tests/keepalive.rs`)
 - [x] Max frame size limit (16 MiB, configurable constant)
 - [x] Per-message deflate behind the `permessage-deflate` feature: RSV1 codec support, client offer / server accept (no-context-takeover), per-message compress/decompress with decompression-bomb cap; integration verified over duplex
 - [x] Integration tests: echo server (duplex), control frames, close handshake, dedicated fragmented-message assembly test
@@ -189,7 +190,7 @@
 - [x] `CHANGELOG.md` with Keep a Changelog format
 - [x] `SECURITY.md` — responsible disclosure contact (TPT Solutions)
 - [x] `deny.toml` — `[licenses]` allow list: `MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `Unicode-DFS-2016`
-- [ ] Publish dry-run: `cargo publish --dry-run` for each crate in dependency order
+- [ ] Publish dry-run: `cargo publish --dry-run` for each crate in dependency order (`tpt-async-core` and `tpt-async-macros` pass; the rest can't be dry-run until their upstream crates exist on crates.io)
 - [ ] Crates.io publish order (respects dep graph):
   1. `tpt-async-core`
   2. `tpt-async-macros`
@@ -200,6 +201,8 @@
   7. `tpt-net-http`
   8. `tpt-net-ws`
   9. `tpt-async` (facade — last)
+
+  `tpt-async-test` is not in this list. Decide whether to publish it or set `publish = false`.
 - [ ] Tag `v0.1.0` and create GitHub release with changelog excerpt
 
 ---
@@ -220,7 +223,7 @@
 - [x] `Spawn`/I/O adapter for `embassy` — documented `spawn_fire_and_forget` pattern in `tpt-async-executor` docs (`# Embassy`); not shipped as code, since embassy's `__pender` symbol breaks `--all-features` test linking, and the crate is std-only. I/O side DONE (`EmbeddedIo` over `embedded-io-async`); the Spawn side needs embassy-executor review: our `Spawn::spawn` returns a `JoinHandle`, which embassy's fire-and-forget `Spawner::spawn` (SpawnToken) cannot provide — implement as a documented `spawn_fire_and_forget(spawner, fut)` helper instead of a trait impl
 - [x] HTTP-agnostic `retry` + `RetryPolicy` (exponential backoff, capped) in `tpt-async-timer` (std feature), built on the driver's `sleep`
 - [x] `tracing` integration: `tpt-async-executor` `tracing` feature (span per task poll, trace event per spawn); the timer stays `no_std` without it. `defmt` tried and REVERTED: any `defmt::write!`/Format use references `_defmt_acquire`-family linker symbols that only resolve against an embedded defmt logger, so host `--all-features` test builds fail to link (CI gate). Feasible path: keep defmt impls in a separate `tpt-async-defmt` crate, or support per-target feature resolution. `defmt` remains open
-- [x] CI job tracking dep count + release/wasm artifact sizes into the job summary (`.github/workflows/size.yml`); README badge still open
+- [x] CI job tracking dep count + release/wasm artifact sizes into the job summary (`.github/workflows/size.yml`); README badge added
 
 ## Usability / automation (from adoption/usability review)
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `tpt-net-http`: keep-alive is preserved when a request has `Content-Length: 0` and the handler does not read the body. Our client sends that header on every GET, so previously each such request closed the connection
+
 ### Changed
 - MSRV raised from Rust 1.75 to Rust 1.88 (`rust-version` in the workspace, CI test matrix, and docs). Current dependencies, including `time` 0.3.55 and `trybuild` 1.0.121, require 1.88 and edition 2024 support in Cargo
 
@@ -22,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tpt-async`: facade crate re-exporting `tpt_async::prelude`
 
 ### Added (continued)
+- `tpt-net-http`: `router::Router`, exact `(method, path)` routing with a `405` for a known path under another method, a `404` default, and `fallback` to replace it. Exposed in the prelude
+- `tpt-net-ws`: timer-driven keepalive via `WebSocketStream::set_keepalive(Some(KeepAlive { interval, timeout }))`. After `interval` of silence a `Ping` is sent; if nothing arrives within `timeout` more, `recv` fails with `WsError::TimedOut`. Disabled by default
 - `tpt-async-executor`: optional `tracing` feature — a span per task poll and a trace event per spawn
 - `tpt-net-http`: HTTP/1.1 zero-copy parser (`Arc` + byte ranges), `ClientConnection`/`Request`/`Response`, keep-alive `serve_connection` with RPITIT `Handler`, strict framing (rejects conflicting Content-Length, TE+CL, obs-fold), chunked + Content-Length + EOF bodies, TLS via `HttpClient::with_tls`
 - `tpt-net-ws`: RFC 6455 `WebSocketStream` — opening handshake (client + server), frame codec with role-checked masking and 16 MiB cap, fragmentation assembly, auto-pong, closing handshake
